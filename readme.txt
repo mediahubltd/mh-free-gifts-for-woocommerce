@@ -23,12 +23,12 @@ This section outlines the steps to install the Free Gifts for Woocoommerce Plugi
 
 
 1. Login to your WordPress admin.
-1. Navigate to "Plugins > Add New".
-1. Type "Free Gifts" into the Keyword search box and press the Enter key.
-1. Find the "Free Gifts for Woocommerce" plugin. Note: the plugin is made by "mediahub".
-1. Click the "Install Now" button.
-1. Click the "Activate" button.
-1. Navigate to "Free Gifts" to add and maintain free gifts.
+2. Navigate to "Plugins > Add New".
+3. Type "Free Gifts" into the Keyword search box and press the Enter key.
+4. Find the "MH Free Gifts for Woocommerce" plugin. Note: the plugin is made by "mediahub".
+5. Click the "Install Now" button.
+6. Click the "Activate" button.
+7. Navigate to "Free Gifts" to add and maintain free gifts.
 
 
 == Frequently Asked Questions ==
