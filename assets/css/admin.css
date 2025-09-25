@@ -1,0 +1,105 @@
+/* Admin Styles for WooBuddy Free Gifts */
+
+.free-gifts_page_wcfg_add_rule .wrap .form-table th {
+    min-width: 200px;
+    vertical-align: top;
+    padding-top: 12px;
+}
+
+.free-gifts_page_wcfg_add_rule .wcfg-product-select, .wcfg-user-select {
+    max-width: 600px;
+}
+
+/* Status toggle select styling */
+.free-gifts_page_wcfg_add_rule .wcfg-status-toggle {
+    width: 100px;
+}
+
+/* Rules list table overrides */
+.free-gifts_page_wcfg_add_rule .widefat .column-actions a.button {
+    margin-right: 5px;
+}
+
+.free-gifts_page_wcfg_add_rule .form-table {
+    //background: #fafafa;
+}
+
+/* Gift rule form padding and spacing */
+.free-gifts_page_wcfg_add_rule .form-table tr th {
+    padding: 12px 16px;
+}
+
+.free-gifts_page_wcfg_add_rule .form-table tr td {
+    padding: 12px 16px;
+}
+
+/* Make date-time inputs consistent */
+.free-gifts_page_wcfg_add_rule input[type="datetime-local"].regular-text {
+    max-width: 250px;
+}
+
+/* Responsive Select2 container */
+.free-gifts_page_wcfg_add_rule .selection--wcfg-product-select {
+    width: 100% !important;
+}
+
+/* Button spacing */
+.free-gifts_page_wcfg_add_rule .page-title-action {
+    margin-left: 10px;
+}
+
+/* Highlight required fields */
+.free-gifts_page_wcfg_add_rule .form-table input[required], .form-table select[required] {
+    border-color: #dc3232;
+}
+
+.free-gifts_page_wcfg_add_rule .wcfg-section-title {
+    background: #fafafa;
+    padding: 15px;
+    font-size: 16px;
+}
+
+/* WooBuddy Free Gifts: status toggle switch */
+.wcfg-switch {
+  position: relative;
+  display: inline-block;
+  width: 46px;
+  height: 24px;
+}
+.wcfg-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+  position: absolute;
+}
+.wcfg-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background-color: #f44336; /* red = off */
+  transition: background-color .3s;
+  border-radius: 24px;
+}
+.wcfg-slider:before {
+  position: absolute;
+  content: "";
+  height: 18px;
+  width: 18px;
+  left: 3px;
+  bottom: 3px;
+  background-color: #fff;
+  transition: transform .3s;
+  border-radius: 50%;
+}
+/* When checked → green + move circle */
+.wcfg-switch input:checked + .wcfg-slider {
+  background-color: #4caf50;
+}
+.wcfg-switch input:checked + .wcfg-slider:before {
+  transform: translateX(22px);
+}
+
+body.free-gifts_page_wcfg_add_rule input.small-text, body.free-gifts_page_wcfg_add_rule input[type=number].small-text {
+    width: 65px;
+    padding-right: 0;
+}
