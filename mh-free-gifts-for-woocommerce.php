@@ -1,12 +1,15 @@
 <?php
 /**
- * Plugin Name: Mediahub Free Gifts for WooCommerce
+ * Plugin Name: MH Free Gifts for WooCommerce
  * Plugin URI:  https://github.com/mediahubltd/mh-free-gifts-for-woocommerce
  * Description: Mediahub Free Gifts for WooCommerce gives store owners a powerful yet intuitive way to reward customers with a choice of complimentary products.
  * Version:     1.0.3
  * Author:      mediahub
  * Author URI:  https://www.mediahubsolutions.com
  * Text Domain: mh-free-gifts-for-woocommerce
+ * Requires at least: 6.0
+ * Tested up to: 6.6
+ * Requires PHP: 7.4
  * Requires Plugins: woocommerce
  * License:     GPL v2 or later
  */
@@ -19,7 +22,7 @@ if ( ! defined( 'ABSPATH' ) ) {
  * Constants
  * --------------------------------------------------------------------- */
 if ( ! defined( 'WCFG_VERSION' ) ) {
-    define( 'WCFG_VERSION', '1.1.0' );
+    define( 'WCFG_VERSION', '1.0.3' );
 }
 if ( ! defined( 'WCFG_PLUGIN_DIR' ) ) {
     define( 'WCFG_PLUGIN_DIR', plugin_dir_path( __FILE__ ) );
@@ -27,17 +30,6 @@ if ( ! defined( 'WCFG_PLUGIN_DIR' ) ) {
 if ( ! defined( 'WCFG_PLUGIN_URL' ) ) {
     define( 'WCFG_PLUGIN_URL', plugin_dir_url( __FILE__ ) );
 }
-
-/** ------------------------------------------------------------------------
- * i18n
- * --------------------------------------------------------------------- */
-add_action( 'init', function() {
-    load_plugin_textdomain(
-        'mh-free-gifts-for-woocommerce',
-        false,
-        dirname( plugin_basename( __FILE__ ) ) . '/languages/'
-    );
-} );
 
 /** ------------------------------------------------------------------------
  * Activation: require WooCommerce, then install/upgrade schema
@@ -54,22 +46,28 @@ function wcfg_activate() {
 
     // Install/upgrade schema
     require_once WCFG_PLUGIN_DIR . 'includes/class-wcfg-install.php';
-    if ( class_exists( 'WCFG_Install' ) ) {
+    if ( class_exists( 'WCFG_Install' ) && method_exists( 'WCFG_Install', 'install' ) ) {
         WCFG_Install::install();
+    } elseif ( class_exists( 'WCFG_Install' ) && method_exists( 'WCFG_Install', 'install_tables' ) ) {
+        // Back-compat if your installer still uses install_tables()
+        WCFG_Install::install_tables();
     }
 }
 register_activation_hook( __FILE__, 'wcfg_activate' );
 
 /** ------------------------------------------------------------------------
- * Safety net: ensure schema upgrades run after updates
+ * Optional schema safety net after updates
  * --------------------------------------------------------------------- */
 add_action( 'admin_init', function() {
     if ( ! class_exists( 'WooCommerce' ) ) {
         return;
     }
-    require_once WCFG_PLUGIN_DIR . 'includes/class-wcfg-install.php';
-    if ( class_exists( 'WCFG_Install' ) && method_exists( 'WCFG_Install', 'maybe_install_or_upgrade' ) ) {
-        WCFG_Install::maybe_install_or_upgrade();
+    $installer = WCFG_PLUGIN_DIR . 'includes/class-wcfg-install.php';
+    if ( file_exists( $installer ) ) {
+        require_once $installer;
+        if ( class_exists( 'WCFG_Install' ) && method_exists( 'WCFG_Install', 'maybe_install_or_upgrade' ) ) {
+            WCFG_Install::maybe_install_or_upgrade();
+        }
     }
 } );
 
@@ -86,7 +84,7 @@ add_action( 'plugins_loaded', function() {
         return;
     }
 
-    // Core includes (order matters: DB helper first)
+    // Core includes (DB helper first)
     require_once WCFG_PLUGIN_DIR . 'includes/class-wcfg-db.php';
     require_once WCFG_PLUGIN_DIR . 'includes/class-wcfg-install.php';
     require_once WCFG_PLUGIN_DIR . 'includes/class-wcfg-admin.php';

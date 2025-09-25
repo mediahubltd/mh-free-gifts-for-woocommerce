@@ -1,43 +1,46 @@
 <?php
 /**
- * Installation & Upgrade for WooBuddy Free Gifts
+ * Installation & Upgrade for MH Free Gifts for WooCommerce
  */
-if ( ! defined( 'ABSPATH' ) ) exit;
+if ( ! defined( 'ABSPATH' ) ) { exit; }
 
 class WCFG_Install {
-    const SCHEMA_VERSION = '1.1.0'; // bump when you change SQL
+    const SCHEMA_VERSION = '1.0.03'; // bump when you change SQL
+    const OPTION_KEY     = 'mh-free-gifts-for-woocommerce_schema_version';
 
     /**
      * Main entry: called on plugin activation.
      */
-    public static function install() {
+    public static function install() : void {
         self::maybe_install_or_upgrade();
     }
 
     /**
      * Also run on admin_init if schema version doesn't match (fixes missed activation).
      */
-    public static function maybe_install_or_upgrade() {
-        $installed = get_option( 'wcfg_schema_version' );
+    public static function maybe_install_or_upgrade() : void {
+        $installed = get_option( self::OPTION_KEY );
         if ( $installed !== self::SCHEMA_VERSION ) {
             self::install_tables();
             // self::seed(); // optional
+
             if ( class_exists( 'WCFG_DB' ) && method_exists( 'WCFG_DB', 'bust_rules_cache' ) ) {
                 WCFG_DB::bust_rules_cache();
             }
-            update_option( 'wcfg_schema_version', self::SCHEMA_VERSION, true );
+
+            update_option( self::OPTION_KEY, self::SCHEMA_VERSION, true );
         }
     }
 
     /**
      * Create/upgrade custom tables using dbDelta (idempotent).
      */
-    public static function install_tables() {
+    public static function install_tables() : void {
         global $wpdb;
 
         $charset_collate = $wpdb->get_charset_collate();
 
-        // Prefer helper for table names to avoid typos and keep single source of truth
+        // Prefer helper for table names to avoid typos and keep single source of truth.
         $rules_table = ( class_exists( 'WCFG_DB' ) && method_exists( 'WCFG_DB', 'rules_table' ) )
             ? WCFG_DB::rules_table()
             : $wpdb->prefix . 'wcfg_rules';
@@ -48,7 +51,8 @@ class WCFG_Install {
 
         require_once ABSPATH . 'wp-admin/includes/upgrade.php';
 
-        // Rules table
+        // dbDelta requires literal SQL strings; table names cannot be parameterized.
+        // phpcs:disable WordPress.DB.PreparedSQL.InterpolatedNotPrepared
         $sql_rules = "
         CREATE TABLE {$rules_table} (
             id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -78,7 +82,6 @@ class WCFG_Install {
             KEY date_to (date_to)
         ) {$charset_collate};";
 
-        // Usage table
         $sql_usage = "
         CREATE TABLE {$usage_table} (
             id BIGINT(20) UNSIGNED NOT NULL AUTO_INCREMENT,
@@ -89,6 +92,7 @@ class WCFG_Install {
             KEY rule_id (rule_id),
             KEY user_id (user_id)
         ) {$charset_collate};";
+        // phpcs:enable WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 
         dbDelta( $sql_rules );
         dbDelta( $sql_usage );
@@ -97,7 +101,7 @@ class WCFG_Install {
     /**
      * Optional initial seed for testing/dev.
      */
-    private static function seed() {
+    private static function seed() : void {
         return; // no-op by default
 
         /*
@@ -106,8 +110,10 @@ class WCFG_Install {
             ? WCFG_DB::rules_table()
             : $wpdb->prefix . 'wcfg_rules';
 
-        $exists = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$rules_table}" ); // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
+        // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
+        $exists = (int) $wpdb->get_var( "SELECT COUNT(*) FROM {$rules_table}" );
         if ( ! $exists ) {
+            // phpcs:ignore WordPress.DB.DirectDatabaseQuery.DirectQuery
             $wpdb->insert( $rules_table, [
                 'name'          => 'Welcome Gift',
                 'status'        => 1,
