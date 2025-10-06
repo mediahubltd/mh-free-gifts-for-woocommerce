@@ -54,9 +54,6 @@ final class MHFGFWC_Frontend {
 	}
 
     /**
-     * Enqueue CSS/JS for classic pages, and mount gifts in Cart/Checkout Blocks.
-     */
-    /**
      * Enqueue CSS/JS for both classic and block-based cart/checkout.
      */
     public function enqueue_assets() {
@@ -95,10 +92,12 @@ final class MHFGFWC_Frontend {
 
         // --- Conditionally enqueue Block support (only if block templates present) ---
         global $post;
-        $is_block_cart = $post && has_block( 'woocommerce/cart', $post );
-        $is_block_checkout = $post && has_block( 'woocommerce/checkout', $post );
+        $is_block_cart    = $post && function_exists( 'has_block' ) && has_block( 'woocommerce/cart', $post );
+        $is_block_checkout= $post && function_exists( 'has_block' ) && has_block( 'woocommerce/checkout', $post );
 
-        if ( $is_block_cart || $is_block_checkout ) {
+        $should_enqueue_blocks = ( $is_block_cart || $is_block_checkout || ( ( is_cart() || is_checkout() ) && $theme_supports_blocks ) );
+
+        if ( $should_enqueue_blocks ) {
             $blocks_path = MHFGFWC_PLUGIN_DIR . 'assets/js/blocks.js';
             $deps = [];
 
@@ -115,22 +114,6 @@ final class MHFGFWC_Frontend {
                 true
             );
 
-            /*wp_localize_script( 'mhfgfwc-blocks', 'mhfgfwcBlocks', [
-                'context'              => $is_block_cart ? 'cart' : 'checkout',
-                'mountId'              => 'mhfgfwc-blocks-slot',
-                'mountTitle'           => __( 'Choose Your Free Gift', 'mh-free-gifts-for-woocommerce' ),
-                // MAIN column container (left)
-                'cartMainSel'          => '.wc-block-components-main, .wc-block-cart__main',
-                // The cart items block (we’ll insert the slot after this)
-                'cartItemsSel'         => '.wp-block-woocommerce-cart-items-block, .wc-block-cart-items',
-                // Sidebar & totals (kept for fallback, but we won’t insert before it anymore)
-                'cartTotalsSel'        => '.wp-block-woocommerce-cart-totals-block, .wc-block-components-sidebar',
-                'checkoutSidebarSel'   => '.wp-block-woocommerce-checkout-order-summary-block, .wp-block-woocommerce-checkout-order-summary',
-                'renderUrl'            => admin_url( 'admin-ajax.php?action=mhfgfwc_render_gifts' ),
-                'addUrl'               => WC_AJAX::get_endpoint( 'mhfgfwc_add_gift' ),
-                'removeUrl'            => WC_AJAX::get_endpoint( 'mhfgfwc_remove_gift' ),
-                'nonce'                => wp_create_nonce( 'mhfgfwc_frontend_nonce' ),
-            ] );*/
             wp_localize_script( 'mhfgfwc-blocks', 'mhfgfwcBlocks', [
               'context'      => $is_block_cart ? 'cart' : 'checkout',
               'mountId'      => 'mhfgfwc-blocks-slot',
@@ -272,9 +255,6 @@ final class MHFGFWC_Frontend {
 	 * Render the gift selector grid on cart & checkout (cart area)
 	 */
 	public function display_cart_gifts() {
-        
-        $session_key = apply_filters( 'mhfgfwc_session_key', 'mhfgfwc_available_gifts' );
-        $available   = WC()->session->get( $session_key, array() );
         $session_key = apply_filters( 'mhfgfwc_session_key', 'mhfgfwc_available_gifts' );
 		$available   = WC()->session->get( $session_key, array() );
 		if ( ! is_array( $available ) || empty( $available ) ) {
@@ -367,6 +347,39 @@ final class MHFGFWC_Frontend {
         WC()->session->set( $session_key, $built );
         return $built;
     }
+    
+    /**
+     * Allowed tags/attributes for the Free Gifts markup.
+     */
+    private function kses_allowed_gift_markup() {
+        return [
+            'div'  => [
+                'class'     => true,
+                'data-rule' => true,
+            ],
+            'h3'   => [ 'class' => true ],
+            'span' => [ 'class' => true ],
+            'a'    => [
+                'href'          => true,
+                'class'         => true,
+                'data-rule'     => true,
+                'data-product'  => true,
+                'data-item-key' => true,
+                'aria-label'    => true,
+            ],
+            'img'  => [
+                'src'    => true,
+                'class'  => true,
+                'alt'    => true,
+                'srcset' => true,
+                'sizes'  => true,
+                'width'  => true,
+                'height' => true,
+                'loading'=> true,
+                'decoding'=> true,
+            ],
+        ];
+    }
 
     
     /**
@@ -383,8 +396,8 @@ final class MHFGFWC_Frontend {
         $this->display_cart_gifts();
         $html = ob_get_clean();
 
-        // Echo raw HTML (Blocks code will drop it into the slot)
-        echo esc_html( $html );
+        // Compliant: escape with an explicit KSES schema so markup remains intact. (Blocks code will drop it into the slot)
+	    echo wp_kses( $html, $this->kses_allowed_gift_markup() );
         wp_die();
     }
 
