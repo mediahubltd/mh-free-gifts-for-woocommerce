@@ -2,7 +2,7 @@
 Contributors: mediahub
 Plugin URI: https://www.mediahubsolutions.com/mh-free-gifts-for-woocommerce/
 Description: Let customers choose a free gift when cart criteria are met (threshold, qty, dependencies).
-Tags: woocommerce, free gift, promotions, marketing, cart rules, checkout
+Tags: woocommerce, free gift, promotions, cart rules, checkout rules
 Requires at least: 6.0
 Tested up to: 6.8
 Stable tag: 1.0.4

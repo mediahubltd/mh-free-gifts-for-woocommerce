@@ -273,24 +273,9 @@ final class MHFGFWC_Frontend {
 	 */
 	public function display_cart_gifts() {
         
-        //DEBUG START
-        if ( defined( 'WP_DEBUG_LOG' ) && WP_DEBUG_LOG ) {
-            error_log( '[MHFGFWC] display_cart_gifts triggered on ' . ( is_cart() ? 'cart' : 'other' ) );
-        }
-
-        if ( ! function_exists( 'WC' ) || ! WC()->session ) {
-            error_log( '[MHFGFWC] WooCommerce session not available' );
-            return;
-        }
-        //DEBUG END
-
         $session_key = apply_filters( 'mhfgfwc_session_key', 'mhfgfwc_available_gifts' );
         $available   = WC()->session->get( $session_key, array() );
-        if ( defined( 'WP_DEBUG_LOG' ) && WP_DEBUG_LOG ) {
-            error_log( '[MHFGFWC] available gifts: ' . json_encode( array_keys( (array) $available ) ) );
-        }
-        
-		$session_key = apply_filters( 'mhfgfwc_session_key', 'mhfgfwc_available_gifts' );
+        $session_key = apply_filters( 'mhfgfwc_session_key', 'mhfgfwc_available_gifts' );
 		$available   = WC()->session->get( $session_key, array() );
 		if ( ! is_array( $available ) || empty( $available ) ) {
 			return;
@@ -399,7 +384,7 @@ final class MHFGFWC_Frontend {
         $html = ob_get_clean();
 
         // Echo raw HTML (Blocks code will drop it into the slot)
-        echo (string) $html;
+        echo esc_html( $html );
         wp_die();
     }
 

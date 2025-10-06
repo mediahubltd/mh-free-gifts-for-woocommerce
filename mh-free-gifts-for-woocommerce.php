@@ -44,7 +44,7 @@ if ( ! defined( 'MHFGFWC_TEXT_DOMAIN' ) ) {
  * --------------------------------------------------------------------- */
 add_action( 'plugins_loaded', function () {
     load_plugin_textdomain(
-        MHFGFWC_TEXT_DOMAIN,
+        'mh-free-gifts-for-woocommerce',
         false,
         dirname( plugin_basename( __FILE__ ) ) . '/languages'
     );
@@ -57,8 +57,8 @@ function mhfgfwc_activate() {
     if ( ! class_exists( 'WooCommerce' ) ) {
         deactivate_plugins( plugin_basename( __FILE__ ) );
         wp_die(
-            esc_html__( 'Free Gifts for WooCommerce requires WooCommerce. Please activate WooCommerce first.', MHFGFWC_TEXT_DOMAIN ),
-            esc_html__( 'Plugin dependency check', MHFGFWC_TEXT_DOMAIN ),
+            esc_html__( 'Free Gifts for WooCommerce requires WooCommerce. Please activate WooCommerce first.', 'mh-free-gifts-for-woocommerce' ),
+            esc_html__( 'Plugin dependency check', 'mh-free-gifts-for-woocommerce' ),
             [ 'back_link' => true ]
         );
     }
@@ -97,7 +97,7 @@ add_action( 'plugins_loaded', function() {
     if ( ! class_exists( 'WooCommerce' ) ) {
         add_action( 'admin_notices', function() {
             echo '<div class="notice notice-error"><p>'
-               . esc_html__( 'Free Gifts for WooCommerce requires WooCommerce.', MHFGFWC_TEXT_DOMAIN )
+               . esc_html__( 'Free Gifts for WooCommerce requires WooCommerce.', 'mh-free-gifts-for-woocommerce' )
                . '</p></div>';
         } );
         return;
