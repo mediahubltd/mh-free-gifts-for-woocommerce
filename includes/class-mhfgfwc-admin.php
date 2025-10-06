@@ -7,8 +7,15 @@ if ( ! defined( 'ABSPATH' ) ) {
     exit;
 }
 
-class WCFG_Admin {
+class MHFGFWC_Admin {
     private static $instance;
+
+    /**
+     * Store our exact screen hooks so we can scope enqueues precisely.
+     * @var string
+     */
+    private $menu_hook = '';
+    private $submenu_hook = '';
 
     public static function instance() {
         if ( ! self::$instance ) {
@@ -22,110 +29,143 @@ class WCFG_Admin {
         add_action( 'admin_enqueue_scripts', [ $this, 'enqueue_assets' ] );
 
         // Mutations
-        add_action( 'admin_post_wcfg_save_rule',   [ $this, 'save_rule' ] );
-        add_action( 'admin_post_wcfg_delete_rule', [ $this, 'delete_rule' ] );
+        add_action( 'admin_post_mhfgfwc_save_rule',   [ $this, 'save_rule' ] );
+        add_action( 'admin_post_mhfgfwc_delete_rule', [ $this, 'delete_rule' ] );
 
         // AJAX
-        add_action( 'wp_ajax_wcfg_search_products', [ $this, 'ajax_search_products' ] );
-        add_action( 'wp_ajax_wcfg_toggle_status',   [ $this, 'ajax_toggle_status' ] );
-        add_action( 'wp_ajax_wcfg_search_users',    [ $this, 'ajax_search_users' ] );
-
-        // Clamp menu icon to 20×20
-        add_action( 'admin_head', function() {
-            ?>
-            <style>
-                #toplevel_page_wcfg_rules .wp-menu-image img,
-                #toplevel_page_wcfg_rules .wp-menu-image svg {
-                    width: 20px !important;
-                    height: 20px !important;
-                    padding-top: 7px;
-                }
-            </style>
-            <?php
-        } );
+        add_action( 'wp_ajax_mhfgfwc_search_products', [ $this, 'ajax_search_products' ] );
+        add_action( 'wp_ajax_mhfgfwc_toggle_status',   [ $this, 'ajax_toggle_status' ] );
+        add_action( 'wp_ajax_mhfgfwc_search_users',    [ $this, 'ajax_search_users' ] );
     }
 
     public function register_menu() {
-        add_menu_page(
-            __( 'WooBuddy Free Gifts', 'mh-free-gifts-for-woocommerce' ),
+        $this->menu_hook = add_menu_page(
+            __( 'MH Free Gifts for WooCommerce', 'mh-free-gifts-for-woocommerce' ),
             __( 'Free Gifts', 'mh-free-gifts-for-woocommerce' ),
             'manage_options',
-            'wcfg_rules',
+            'mhfgfwc_rules',
             [ $this, 'render_rules_list' ],
-            WCFG_PLUGIN_URL . 'assets/images/wcfg-menu-icon.svg',
+            MHFGFWC_PLUGIN_URL . 'assets/images/mhfgfwc-menu-icon.svg',
             56
         );
 
-        add_submenu_page(
-            'wcfg_rules',
+        $this->submenu_hook = add_submenu_page(
+            'mhfgfwc_rules',
             __( 'Add New Rule', 'mh-free-gifts-for-woocommerce' ),
             __( 'Add Rule', 'mh-free-gifts-for-woocommerce' ),
             'manage_options',
-            'wcfg_add_rule',
+            'mhfgfwc_add_rule',
             [ $this, 'render_rule_form' ]
         );
     }
 
+    /**
+     * Only enqueue on our plugin screens.
+     */
     public function enqueue_assets( $hook ) {
-        if ( strpos( $hook, 'wcfg_' ) === false ) {
+        // Bail if not one of our pages.
+        if ( $hook !== $this->menu_hook && $hook !== $this->submenu_hook ) {
             return;
         }
 
-        // Core jQuery UI
+        // ---------------------------
+        // Register vendor dependencies
+        // ---------------------------
+        // Core jQuery UI (registered by WP)
         wp_enqueue_script( 'jquery-ui-datepicker' );
         wp_enqueue_script( 'jquery-ui-slider' );
 
-        // Theme CSS for jQuery UI
+        // Register jQuery UI theme CSS used by our date/time picker.
         wp_register_style(
-            'wcfg-jquery-ui-theme',
-            WCFG_PLUGIN_URL . 'assets/css/jquery-ui.css',
+            'mhfgfwc-jquery-ui-theme',
+            MHFGFWC_PLUGIN_URL . 'assets/css/jquery-ui.css',
             [],
             '1.12.1'
         );
-        wp_enqueue_style( 'wcfg-jquery-ui-theme' );
 
-        // Timepicker addon
-        wp_enqueue_style(
-            'wcfg-timepicker',
-            WCFG_PLUGIN_URL . 'assets/css/jquery-ui-timepicker-addon.css',
-            [ 'wcfg-jquery-ui-theme' ],
+        // Timepicker addon (CSS + JS)
+        wp_register_style(
+            'mhfgfwc-timepicker',
+            MHFGFWC_PLUGIN_URL . 'assets/css/jquery-ui-timepicker-addon.css',
+            [ 'mhfgfwc-jquery-ui-theme' ],
             '1.6.3'
         );
-        wp_enqueue_script(
-            'wcfg-timepicker',
-            WCFG_PLUGIN_URL . 'assets/js/jquery-ui-timepicker-addon.js',
+        wp_register_script(
+            'mhfgfwc-timepicker',
+            MHFGFWC_PLUGIN_URL . 'assets/js/jquery-ui-timepicker-addon.js',
             [ 'jquery-ui-datepicker', 'jquery-ui-slider' ],
             '1.6.3',
             true
         );
 
-        // SelectWoo
-        if ( function_exists( 'wc_enqueue_select2' ) ) {
-            wc_enqueue_select2();
-        } else {
-            wp_enqueue_style( 'selectWoo' );
-            wp_enqueue_script( 'selectWoo' );
-        }
+        // --- Ensure WooCommerce SelectWoo is available (script + style) ---
+        $wc_url = function_exists( 'WC' ) && is_object( WC() ) ? WC()->plugin_url() : plugins_url( 'woocommerce' );
 
-        wp_enqueue_script(
-            'wcfg-admin',
-            WCFG_PLUGIN_URL . 'assets/js/admin.js',
-            [ 'selectWoo' ],
-            WCFG_VERSION . '.' . time(),
+        // Script: selectWoo
+        if ( ! wp_script_is( 'selectWoo', 'registered' ) && ! wp_script_is( 'selectWoo', 'enqueued' ) ) {
+            // WooCommerce path: /assets/js/selectWoo/selectWoo.full.min.js
+            wp_register_script(
+                'selectWoo',
+                trailingslashit( $wc_url ) . 'assets/js/selectWoo/selectWoo.full.min.js',
+                [ 'jquery' ],
+                '1.0.8',
+                true
+            );
+        }
+        wp_enqueue_script( 'selectWoo' );
+
+        // Style: select2
+        if ( ! wp_style_is( 'select2', 'registered' ) && ! wp_style_is( 'select2', 'enqueued' ) ) {
+            // WooCommerce path: /assets/css/select2.css
+            wp_register_style(
+                'select2',
+                trailingslashit( $wc_url ) . 'assets/css/select2.css',
+                [],
+                '4.0.3'
+            );
+        }
+        wp_enqueue_style( 'select2' );
+
+
+        // ---------------------------
+        // Register our admin assets
+        // ---------------------------
+        wp_register_style(
+            'mhfgfwc-admin',
+            MHFGFWC_PLUGIN_URL . 'assets/css/admin.css',
+            [ 'mhfgfwc-jquery-ui-theme', 'mhfgfwc-timepicker', 'select2' ], 
+            MHFGFWC_VERSION
+        );
+
+        wp_register_script(
+            'mhfgfwc-admin',
+            MHFGFWC_PLUGIN_URL . 'assets/js/admin.js',
+            [ 'selectWoo', 'mhfgfwc-timepicker' ], 
+            MHFGFWC_VERSION,
             true
         );
 
-        wp_enqueue_style(
-            'wcfg-admin',
-            WCFG_PLUGIN_URL . 'assets/css/admin.css',
-            [],
-            WCFG_VERSION
-        );
+        // ---------------------------
+        // Enqueue our admin assets
+        // ---------------------------
+        wp_enqueue_style( 'mhfgfwc-admin' );
+        wp_enqueue_script( 'mhfgfwc-admin' );
 
-        wp_localize_script( 'wcfg-admin', 'wcfgAdmin', [
+        // Localize/vars
+        wp_localize_script( 'mhfgfwc-admin', 'mhfgfwcAdmin', [
             'ajax_url' => admin_url( 'admin-ajax.php' ),
-            'nonce'    => wp_create_nonce( 'wcfg_admin_nonce' ),
+            'nonce'    => wp_create_nonce( 'mhfgfwc_admin_nonce' ),
         ] );
+
+        // Tiny inline CSS tweak: use proper API (no <style> tags)
+        $inline_admin_css = '
+        #toplevel_page_mhfgfwc_rules .wp-menu-image img,
+        #toplevel_page_mhfgfwc_rules .wp-menu-image svg {
+            width: 20px !important;
+            height: 20px !important;
+            padding-top: 7px;
+        }';
+        wp_add_inline_style( 'mhfgfwc-admin', $inline_admin_css );
     }
 
     /**
@@ -137,12 +177,12 @@ class WCFG_Admin {
         }
 
         global $wpdb;
-        $table = method_exists( 'WCFG_DB', 'rules_table' ) ? WCFG_DB::rules_table() : $wpdb->prefix . 'wcfg_rules';
+        $table = method_exists( 'MHFGFWC_DB', 'rules_table' ) ? MHFGFWC_DB::rules_table() : $wpdb->prefix . 'mhfgfwc_rules';
 
         // Tiny 30s admin cache (non-persistent OK)
-        $cache_key = 'wcfg_admin_rules_list_v1';
+        $cache_key = 'mhfgfwc_admin_rules_list_v1';
         // phpcs:ignore WordPressVIPCodingStandards.VipCache.CacheGetNonPersistent
-        $rules = wp_cache_get( $cache_key, 'wcfg' );
+        $rules = wp_cache_get( $cache_key, 'mhfgfwc' );
 
         if ( false === $rules ) {
             // Table names can't use placeholders; {$table} is trusted (plugin-owned).
@@ -156,16 +196,14 @@ class WCFG_Admin {
             // phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 
             // phpcs:ignore WordPressVIPCodingStandards.VipCache.CacheSetNonPersistent
-            wp_cache_set( $cache_key, $rules, 'wcfg', 30 );
+            wp_cache_set( $cache_key, $rules, 'mhfgfwc', 30 );
         }
-
-
 
         ?>
         <div class="wrap">
             <h1>
                 <?php esc_html_e( 'Free Gift Rules', 'mh-free-gifts-for-woocommerce' ); ?>
-                <a href="admin.php?page=wcfg_add_rule" class="page-title-action"><?php esc_html_e( 'Add Rule', 'mh-free-gifts-for-woocommerce' ); ?></a>
+                <a href="admin.php?page=mhfgfwc_add_rule" class="page-title-action"><?php esc_html_e( 'Add Rule', 'mh-free-gifts-for-woocommerce' ); ?></a>
             </h1>
 
             <table class="widefat fixed striped">
@@ -184,18 +222,18 @@ class WCFG_Admin {
                 <?php if ( $rules ) : foreach ( $rules as $rule ) : ?>
                     <tr>
                         <td>
-                            <label class="wcfg-switch">
+                            <label class="mhfgfwc-switch">
                                 <input
                                     type="checkbox"
-                                    class="wcfg-status-toggle"
+                                    class="mhfgfwc-status-toggle"
                                     data-rule-id="<?php echo esc_attr( $rule->id ); ?>"
                                     <?php checked( (int) $rule->status, 1 ); ?>
                                 />
-                                <span class="wcfg-slider"></span>
+                                <span class="mhfgfwc-slider"></span>
                             </label>
                         </td>
                         <td>
-                            <a href="admin.php?page=wcfg_add_rule&rule_id=<?php echo esc_attr( $rule->id ); ?>">
+                            <a href="admin.php?page=mhfgfwc_add_rule&rule_id=<?php echo esc_attr( $rule->id ); ?>">
                                 <?php echo esc_html( $rule->name ); ?>
                             </a>
                         </td>
@@ -212,10 +250,10 @@ class WCFG_Admin {
                         <td><?php echo $rule->date_to   ? esc_html( $rule->date_to )   : '&mdash;'; ?></td>
                         <td><?php echo esc_html( $rule->last_modified ); ?></td>
                         <td>
-                            <a href="admin.php?page=wcfg_add_rule&rule_id=<?php echo esc_attr( $rule->id ); ?>" class="button">
+                            <a href="admin.php?page=mhfgfwc_add_rule&rule_id=<?php echo esc_attr( $rule->id ); ?>" class="button">
                                 <?php esc_html_e( 'Edit', 'mh-free-gifts-for-woocommerce' ); ?>
                             </a>
-                            <a href="<?php echo esc_url( wp_nonce_url( 'admin-post.php?action=wcfg_delete_rule&rule_id=' . $rule->id, 'wcfg_delete_rule' ) ); ?>" class="button wcfg-delete-rule">
+                            <a href="<?php echo esc_url( wp_nonce_url( 'admin-post.php?action=mhfgfwc_delete_rule&rule_id=' . $rule->id, 'mhfgfwc_delete_rule' ) ); ?>" class="button mhfgfwc-delete-rule">
                                 <?php esc_html_e( 'Delete', 'mh-free-gifts-for-woocommerce' ); ?>
                             </a>
                         </td>
@@ -237,7 +275,7 @@ class WCFG_Admin {
         // phpcs:disable WordPress.Security.NonceVerification.Recommended
         // Read-only GET usage to render the form
         global $wpdb;
-        $table   = method_exists( 'WCFG_DB', 'rules_table' ) ? WCFG_DB::rules_table() : $wpdb->prefix . 'wcfg_rules';
+        $table   = method_exists( 'MHFGFWC_DB', 'rules_table' ) ? MHFGFWC_DB::rules_table() : $wpdb->prefix . 'mhfgfwc_rules';
 
         // Success notices
         if ( ! empty( $_GET['message'] ) ) {
@@ -245,6 +283,7 @@ class WCFG_Admin {
             switch ( sanitize_text_field( wp_unslash( $_GET['message'] ) ) ) {
                 case 'created': $msg = __( 'New gift‐rule created.', 'mh-free-gifts-for-woocommerce' ); break;
                 case 'updated': $msg = __( 'Gift‐rule updated.',   'mh-free-gifts-for-woocommerce' ); break;
+                case 'deleted': $msg = __( 'Gift‐rule deleted.',   'mh-free-gifts-for-woocommerce' ); break;
             }
             if ( $msg ) {
                 printf( '<div class="notice notice-success is-dismissible"><p>%s</p></div>', esc_html( $msg ) );
@@ -256,9 +295,9 @@ class WCFG_Admin {
 
         $rule = null;
         if ( $rule_id ) {
-            $cache_key = 'wcfg_admin_rule_' . $rule_id;
+            $cache_key = 'mhfgfwc_admin_rule_' . $rule_id;
             // phpcs:ignore WordPressVIPCodingStandards.VipCache.CacheGetNonPersistent
-            $rule = wp_cache_get( $cache_key, 'wcfg' );
+            $rule = wp_cache_get( $cache_key, 'mhfgfwc' );
 
             if ( false === $rule ) {
                 // Table names can't use placeholders; {$table} is trusted.
@@ -273,11 +312,9 @@ class WCFG_Admin {
                 // phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 
                 // phpcs:ignore WordPressVIPCodingStandards.VipCache.CacheSetNonPersistent
-                wp_cache_set( $cache_key, $rule, 'wcfg', 30 );
+                wp_cache_set( $cache_key, $rule, 'mhfgfwc', 30 );
             }
         }
-
-
 
         $gifts     = $rule ? maybe_unserialize( $rule->gifts ) : [];
         $prod_deps = $rule ? maybe_unserialize( $rule->product_dependency ) : [];
@@ -286,34 +323,34 @@ class WCFG_Admin {
         ?>
         <div class="wrap">
             <h1><?php echo $rule ? esc_html__( 'Edit Rule', 'mh-free-gifts-for-woocommerce' ) : esc_html__( 'Add New Rule', 'mh-free-gifts-for-woocommerce' ); ?></h1>
-            <form method="post" action="admin-post.php">
-                <?php wp_nonce_field( 'wcfg_save_rule', 'wcfg_nonce' ); ?>
-                <input type="hidden" name="action" value="wcfg_save_rule">
+            <form method="post" action="admin-post.php" autocomplete="off">
+                <?php wp_nonce_field( 'mhfgfwc_save_rule', 'mhfgfwc_nonce' ); ?>
+                <input type="hidden" name="action" value="mhfgfwc_save_rule">
                 <input type="hidden" name="rule_id" value="<?php echo esc_attr( $rule_id ); ?>">
 
-                <div class="wcfg-section-title">General Settings</div>
+                <div class="mhfgfwc-section-title">General Settings</div>
                 <table class="form-table"><tbody>
                     <tr>
-                        <th><label for="wcfg_status"><?php esc_html_e( 'Status', 'mh-free-gifts-for-woocommerce' ); ?></label></th>
+                        <th><label for="mhfgfwc_status"><?php esc_html_e( 'Status', 'mh-free-gifts-for-woocommerce' ); ?></label></th>
                         <td>
-                            <select name="status" id="wcfg_status">
+                            <select name="status" id="mhfgfwc_status">
                                 <option value="1" <?php selected( $rule->status ?? 1, 1 ); ?>><?php esc_html_e( 'Active', 'mh-free-gifts-for-woocommerce' ); ?></option>
                                 <option value="0" <?php selected( $rule->status ?? 1, 0 ); ?>><?php esc_html_e( 'Disabled', 'mh-free-gifts-for-woocommerce' ); ?></option>
                             </select>
                         </td>
                     </tr>
                     <tr>
-                        <th><label for="wcfg_name"><?php esc_html_e( 'Rule Name', 'mh-free-gifts-for-woocommerce' ); ?></label></th>
-                        <td><input name="name" id="wcfg_name" type="text" value="<?php echo esc_attr( $rule->name ?? '' ); ?>" class="regular-text" required></td>
+                        <th><label for="mhfgfwc_name"><?php esc_html_e( 'Rule Name', 'mh-free-gifts-for-woocommerce' ); ?></label></th>
+                        <td><input name="name" id="mhfgfwc_name" type="text" value="<?php echo esc_attr( $rule->name ?? '' ); ?>" class="regular-text" required></td>
                     </tr>
                     <tr>
-                        <th><label for="wcfg_description"><?php esc_html_e( 'Description', 'mh-free-gifts-for-woocommerce' ); ?></label></th>
-                        <td><textarea name="description" id="wcfg_description" class="regular-text" rows="3"><?php echo esc_textarea( $rule->description ?? '' ); ?></textarea></td>
+                        <th><label for="mhfgfwc_description"><?php esc_html_e( 'Description', 'mh-free-gifts-for-woocommerce' ); ?></label></th>
+                        <td><textarea name="description" id="mhfgfwc_description" class="regular-text" rows="3"><?php echo esc_textarea( $rule->description ?? '' ); ?></textarea></td>
                     </tr>
                     <tr>
-                        <th><label for="wcfg_gifts"><?php esc_html_e( 'Select Gifts', 'mh-free-gifts-for-woocommerce' ); ?></label></th>
+                        <th><label for="mhfgfwc_gifts"><?php esc_html_e( 'Select Gifts', 'mh-free-gifts-for-woocommerce' ); ?></label></th>
                         <td>
-                            <select name="gifts[]" id="wcfg_gifts" class="wcfg-product-select" multiple="multiple" data-placeholder="<?php esc_attr_e( 'Search products...', 'mh-free-gifts-for-woocommerce' ); ?>" style="width:100%;">
+                            <select name="gifts[]" id="mhfgfwc_gifts" class="mhfgfwc-product-select" multiple="multiple" data-placeholder="<?php esc_attr_e( 'Search products...', 'mh-free-gifts-for-woocommerce' ); ?>" style="width:100%;">
                                 <?php foreach ( (array) $gifts as $gid ) :
                                     $prod = wc_get_product( $gid ); if ( $prod ) : ?>
                                         <option value="<?php echo esc_attr( $gid ); ?>" selected><?php echo esc_html( $prod->get_name() ); ?></option>
@@ -323,29 +360,29 @@ class WCFG_Admin {
                     </tr>
                 </tbody></table>
 
-                <div class="wcfg-section-title">Display Settings</div>
+                <div class="mhfgfwc-section-title">Display Settings</div>
                 <table class="form-table"><tbody>
                     <tr>
-                        <th><label for="wcfg_display_location"><?php esc_html_e( 'Display Gifts On', 'mh-free-gifts-for-woocommerce' ); ?></label></th>
+                        <th><label for="mhfgfwc_display_location"><?php esc_html_e( 'Display Gifts On', 'mh-free-gifts-for-woocommerce' ); ?></label></th>
                         <td>
-                            <select name="display_location" id="wcfg_display_location">
+                            <select name="display_location" id="mhfgfwc_display_location">
                                 <option value="cart"     <?php selected( $rule->display_location ?? '', 'cart' ); ?>><?php esc_html_e( 'Cart', 'mh-free-gifts-for-woocommerce' ); ?></option>
                                 <option value="checkout" <?php selected( $rule->display_location ?? '', 'checkout' ); ?>><?php esc_html_e( 'Cart & Checkout', 'mh-free-gifts-for-woocommerce' ); ?></option>
                             </select>
                         </td>
                     </tr>
                     <tr>
-                        <th><label for="wcfg_items_per_row"><?php esc_html_e( 'Items Per Row (Cart)', 'mh-free-gifts-for-woocommerce' ); ?></label></th>
-                        <td><input name="items_per_row" id="wcfg_items_per_row" type="number" min="1" max="6" value="<?php echo esc_attr( $rule->items_per_row ?? 4 ); ?>" class="small-text"></td>
+                        <th><label for="mhfgfwc_items_per_row"><?php esc_html_e( 'Items Per Row (Cart)', 'mh-free-gifts-for-woocommerce' ); ?></label></th>
+                        <td><input name="items_per_row" id="mhfgfwc_items_per_row" type="number" min="1" max="6" value="<?php echo esc_attr( $rule->items_per_row ?? 4 ); ?>" class="small-text"></td>
                     </tr>
                 </tbody></table>
 
-                <div class="wcfg-section-title">Usage Restrictions</div>
+                <div class="mhfgfwc-section-title">Usage Restrictions</div>
                 <table class="form-table"><tbody>
                     <tr>
                         <th><?php esc_html_e( 'Product Dependency', 'mh-free-gifts-for-woocommerce' ); ?></th>
                         <td>
-                            <select name="product_dependency[]" class="wcfg-product-select" multiple="multiple" data-placeholder="<?php esc_attr_e( 'Search products...', 'mh-free-gifts-for-woocommerce' ); ?>" style="width:100%;">
+                            <select name="product_dependency[]" class="mhfgfwc-product-select" multiple="multiple" autocomplete="off" data-placeholder="<?php esc_attr_e( 'Search products...', 'mh-free-gifts-for-woocommerce' ); ?>" style="width:100%;">
                                 <?php foreach ( (array) $prod_deps as $pid ) :
                                     $p = wc_get_product( $pid ); if ( $p ) : ?>
                                         <option value="<?php echo esc_attr( $pid ); ?>" selected><?php echo esc_html( $p->get_name() ); ?></option>
@@ -356,7 +393,7 @@ class WCFG_Admin {
                     <tr>
                         <th><?php esc_html_e( 'User Dependency', 'mh-free-gifts-for-woocommerce' ); ?></th>
                         <td>
-                            <select name="user_dependency[]" class="wcfg-user-select" multiple="multiple" data-placeholder="<?php esc_attr_e( 'Search users...', 'mh-free-gifts-for-woocommerce' ); ?>" style="width:100%;">
+                            <select name="user_dependency[]" class="mhfgfwc-user-select" multiple="multiple" autocomplete="off" data-placeholder="<?php esc_attr_e( 'Search users...', 'mh-free-gifts-for-woocommerce' ); ?>" style="width:100%;">
                                 <?php foreach ( (array) $user_deps as $uid ) :
                                     $u = get_userdata( $uid ); if ( $u ) : ?>
                                         <option value="<?php echo esc_attr( $uid ); ?>" selected><?php echo esc_html( $u->display_name ); ?></option>
@@ -371,12 +408,12 @@ class WCFG_Admin {
                         </td>
                     </tr>
                     <tr>
-                        <th><label for="wcfg_gift_quantity"><?php esc_html_e( 'Number of Gifts Allowed', 'mh-free-gifts-for-woocommerce' ); ?></label></th>
-                        <td><input name="gift_quantity" id="wcfg_gift_quantity" type="number" min="1" value="<?php echo esc_attr( $rule->gift_quantity ?? 1 ); ?>" class="small-text"></td>
+                        <th><label for="mhfgfwc_gift_quantity"><?php esc_html_e( 'Number of Gifts Allowed', 'mh-free-gifts-for-woocommerce' ); ?></label></th>
+                        <td><input name="gift_quantity" id="mhfgfwc_gift_quantity" type="number" min="1" value="<?php echo esc_attr( $rule->gift_quantity ?? 1 ); ?>" class="small-text"></td>
                     </tr>
                     <tr>
-                        <th><label for="wcfg_disable_with_coupon"><?php esc_html_e( 'Disable if Coupon Applied', 'mh-free-gifts-for-woocommerce' ); ?></label></th>
-                        <td><input type="checkbox" name="disable_with_coupon" id="wcfg_disable_with_coupon" value="1" <?php checked( $rule->disable_with_coupon ?? 0, 1 ); ?>></td>
+                        <th><label for="mhfgfwc_disable_with_coupon"><?php esc_html_e( 'Disable if Coupon Applied', 'mh-free-gifts-for-woocommerce' ); ?></label></th>
+                        <td><input type="checkbox" name="disable_with_coupon" id="mhfgfwc_disable_with_coupon" value="1" <?php checked( $rule->disable_with_coupon ?? 0, 1 ); ?>></td>
                     </tr>
                     <tr>
                         <th><?php esc_html_e( 'Cart Subtotal', 'mh-free-gifts-for-woocommerce' ); ?></th>
@@ -425,13 +462,13 @@ class WCFG_Admin {
                         </td>
                     </tr>
                     <tr>
-                        <th><label for="wcfg_date_from"><?php esc_html_e( 'Valid From', 'mh-free-gifts-for-woocommerce' ); ?></label></th>
+                        <th><label for="mhfgfwc_date_from"><?php esc_html_e( 'Valid From', 'mh-free-gifts-for-woocommerce' ); ?></label></th>
                         <td>
                             <input
                                 name="date_from"
-                                id="wcfg_date_from"
+                                id="mhfgfwc_date_from"
                                 type="text"
-                                class="wcfg-datepicker"
+                                class="mhfgfwc-datepicker"
                                 value="<?php echo esc_attr( $rule->date_from ? gmdate( 'Y-m-d H:i:s', strtotime( $rule->date_from ) ) : '' ); ?>"
                                 autocomplete="new-password"
                                 autocorrect="off"
@@ -442,13 +479,13 @@ class WCFG_Admin {
                         </td>
                     </tr>
                     <tr>
-                        <th><label for="wcfg_date_to"><?php esc_html_e( 'Valid To', 'mh-free-gifts-for-woocommerce' ); ?></label></th>
+                        <th><label for="mhfgfwc_date_to"><?php esc_html_e( 'Valid To', 'mh-free-gifts-for-woocommerce' ); ?></label></th>
                         <td>
                             <input
                                 name="date_to"
-                                id="wcfg_date_to"
+                                id="mhfgfwc_date_to"
                                 type="text"
-                                class="wcfg-datepicker"
+                                class="mhfgfwc-datepicker"
                                 value="<?php echo esc_attr( $rule->date_to ? gmdate( 'Y-m-d H:i:s', strtotime( $rule->date_to ) ) : '' ); ?>"
                                 autocomplete="new-password"
                                 autocorrect="off"
@@ -460,15 +497,15 @@ class WCFG_Admin {
                     </tr>
                 </tbody></table>
 
-                <div class="wcfg-section-title">Usage Limits</div>
+                <div class="mhfgfwc-section-title">Usage Limits</div>
                 <table class="form-table"><tbody>
                     <tr>
-                        <th><label for="wcfg_limit_per_rule"><?php esc_html_e( 'Usage Limit per Rule', 'mh-free-gifts-for-woocommerce' ); ?></label></th>
-                        <td><input name="limit_per_rule" id="wcfg_limit_per_rule" type="number" min="0" value="<?php echo esc_attr( $rule->limit_per_rule ?? '' ); ?>" class="small-text"></td>
+                        <th><label for="mhfgfwc_limit_per_rule"><?php esc_html_e( 'Usage Limit per Rule', 'mh-free-gifts-for-woocommerce' ); ?></label></th>
+                        <td><input name="limit_per_rule" id="mhfgfwc_limit_per_rule" type="number" min="0" value="<?php echo esc_attr( $rule->limit_per_rule ?? '' ); ?>" class="small-text"></td>
                     </tr>
                     <tr>
-                        <th><label for="wcfg_limit_per_user"><?php esc_html_e( 'Usage Limit per User', 'mh-free-gifts-for-woocommerce' ); ?></label></th>
-                        <td><input name="limit_per_user" id="wcfg_limit_per_user" type="number" min="0" value="<?php echo esc_attr( $rule->limit_per_user ?? '' ); ?>" class="small-text"></td>
+                        <th><label for="mhfgfwc_limit_per_user"><?php esc_html_e( 'Usage Limit per User', 'mh-free-gifts-for-woocommerce' ); ?></label></th>
+                        <td><input name="limit_per_user" id="mhfgfwc_limit_per_user" type="number" min="0" value="<?php echo esc_attr( $rule->limit_per_user ?? '' ); ?>" class="small-text"></td>
                     </tr>
                 </tbody></table>
 
@@ -493,13 +530,13 @@ class WCFG_Admin {
         }
 
         // Verify nonce
-        $raw_nonce = isset( $_POST['wcfg_nonce'] ) ? sanitize_text_field( wp_unslash( $_POST['wcfg_nonce'] ) ) : '';
-        if ( empty( $raw_nonce ) || ! wp_verify_nonce( $raw_nonce, 'wcfg_save_rule' ) ) {
+        $raw_nonce = isset( $_POST['mhfgfwc_nonce'] ) ? sanitize_text_field( wp_unslash( $_POST['mhfgfwc_nonce'] ) ) : '';
+        if ( empty( $raw_nonce ) || ! wp_verify_nonce( $raw_nonce, 'mhfgfwc_save_rule' ) ) {
             wp_die( esc_html__( 'Security check failed.', 'mh-free-gifts-for-woocommerce' ) );
         }
 
         global $wpdb;
-        $table = method_exists( 'WCFG_DB', 'rules_table' ) ? WCFG_DB::rules_table() : $wpdb->prefix . 'wcfg_rules';
+        $table = method_exists( 'MHFGFWC_DB', 'rules_table' ) ? MHFGFWC_DB::rules_table() : $wpdb->prefix . 'mhfgfwc_rules';
 
         // Build sanitized $_POST clone
         $post = array_map( static function( $v ) {
@@ -514,8 +551,8 @@ class WCFG_Admin {
         $status        = isset( $post['status'] ) ? (int) $post['status'] : 0;
         $user_only     = ! empty( $post['user_only'] ) ? 1 : 0;
 
-        $limit_per_rule = ( $post['limit_per_rule'] !== '' && isset( $post['limit_per_rule'] ) ) ? (int) $post['limit_per_rule'] : null;
-        $limit_per_user = ( $post['limit_per_user'] !== '' && isset( $post['limit_per_user'] ) ) ? (int) $post['limit_per_user'] : null;
+        $limit_per_rule = ( isset( $post['limit_per_rule'] ) && $post['limit_per_rule'] !== '' ) ? (int) $post['limit_per_rule'] : null;
+        $limit_per_user = ( isset( $post['limit_per_user'] ) && $post['limit_per_user'] !== '' ) ? (int) $post['limit_per_user'] : null;
 
         $gifts = isset( $post['gifts'] ) ? array_map( 'intval', (array) $post['gifts'] ) : [];
         $gift_quantity = isset( $post['gift_quantity'] ) ? (int) $post['gift_quantity'] : 1;
@@ -574,18 +611,20 @@ class WCFG_Admin {
         }
         // phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 
-        
         // Bust caches so engine/frontend see fresh data
-        if ( class_exists( 'WCFG_DB' ) && method_exists( 'WCFG_DB', 'bust_rules_cache' ) ) {
-            WCFG_DB::bust_rules_cache();
+        if ( class_exists( 'MHFGFWC_DB' ) && method_exists( 'MHFGFWC_DB', 'bust_rules_cache' ) ) {
+            MHFGFWC_DB::bust_rules_cache();
         }
+        
+        wp_cache_delete( 'mhfgfwc_admin_rule_' . $rule_id, 'mhfgfwc' );   // ← clear rule form cache
+        wp_cache_delete( 'mhfgfwc_admin_rules_list_v1', 'mhfgfwc' );       // ← clear list cache
 
         // Redirect: based on which button was clicked
         $stay = isset( $_POST['save'] ); // name="save" => continue editing
         if ( $stay ) {
-            wp_safe_redirect( admin_url( 'admin.php?page=wcfg_add_rule&rule_id=' . $rule_id . '&message=updated' ) );
+            wp_safe_redirect( admin_url( 'admin.php?page=mhfgfwc_add_rule&rule_id=' . $rule_id . '&message=updated' ) );
         } else {
-            wp_safe_redirect( admin_url( 'admin.php?page=wcfg_rules&message=updated' ) );
+            wp_safe_redirect( admin_url( 'admin.php?page=mhfgfwc_rules&message=updated' ) );
         }
         exit;
     }
@@ -596,32 +635,32 @@ class WCFG_Admin {
         }
 
         $get_nonce = isset( $_GET['_wpnonce'] ) ? sanitize_text_field( wp_unslash( $_GET['_wpnonce'] ) ) : '';
-        if ( empty( $get_nonce ) || ! wp_verify_nonce( $get_nonce, 'wcfg_delete_rule' ) ) {
+        if ( empty( $get_nonce ) || ! wp_verify_nonce( $get_nonce, 'mhfgfwc_delete_rule' ) ) {
             wp_die( esc_html__( 'Security check failed.', 'mh-free-gifts-for-woocommerce' ) );
         }
 
         global $wpdb;
-        $table   = method_exists( 'WCFG_DB', 'rules_table' ) ? WCFG_DB::rules_table() : $wpdb->prefix . 'wcfg_rules';
+        $table   = method_exists( 'MHFGFWC_DB', 'rules_table' ) ? MHFGFWC_DB::rules_table() : $wpdb->prefix . 'mhfgfwc_rules';
         $rule_id = isset( $_GET['rule_id'] ) ? absint( wp_unslash( $_GET['rule_id'] ) ) : 0;
 
         // Delete
         // We intentionally use $wpdb writes here; inputs are sanitized and non-user identifiers.
         // phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
-
         if ( $rule_id ) {
             $wpdb->delete( $table, [ 'id' => $rule_id ] );
         }
-        // phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 
-
-        if ( class_exists( 'WCFG_DB' ) && method_exists( 'WCFG_DB', 'bust_rules_cache' ) ) {
-            WCFG_DB::bust_rules_cache();
-        } else {
-            wp_cache_delete( 'wcfg_admin_rules_list_v1', 'wcfg' );
-            wp_cache_delete( 'rules_active_v1', 'wcfg' );
+        // Bust runtime caches used by engine/frontend
+        if ( class_exists( 'MHFGFWC_DB' ) && method_exists( 'MHFGFWC_DB', 'bust_rules_cache' ) ) {
+            MHFGFWC_DB::bust_rules_cache();
         }
 
-        wp_safe_redirect( admin_url( 'admin.php?page=wcfg_rules&message=deleted' ) );
+        // Bust admin-page caches (do this regardless of the branch above)
+        wp_cache_delete( 'mhfgfwc_admin_rule_' . (int) $rule_id, 'mhfgfwc' ); // edit form cache
+        wp_cache_delete( 'mhfgfwc_admin_rules_list_v1', 'mhfgfwc' );          // rules list cache
+
+
+        wp_safe_redirect( admin_url( 'admin.php?page=mhfgfwc_rules&message=deleted' ) );
         exit;
     }
 
@@ -633,7 +672,7 @@ class WCFG_Admin {
             wp_send_json_error( [ 'message' => esc_html__( 'Insufficient permissions.', 'mh-free-gifts-for-woocommerce' ) ], 403 );
         }
 
-        if ( empty( $_REQUEST['nonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_REQUEST['nonce'] ) ), 'wcfg_admin_nonce' ) ) {
+        if ( empty( $_REQUEST['nonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_REQUEST['nonce'] ) ), 'mhfgfwc_admin_nonce' ) ) {
             wp_send_json_error( [ 'message' => esc_html__( 'Invalid nonce', 'mh-free-gifts-for-woocommerce' ) ], 400 );
         }
 
@@ -679,7 +718,7 @@ class WCFG_Admin {
         }
 
         $ajax_nonce = isset( $_POST['nonce'] ) ? sanitize_text_field( wp_unslash( $_POST['nonce'] ) ) : '';
-        if ( empty( $ajax_nonce ) || ! wp_verify_nonce( $ajax_nonce, 'wcfg_admin_nonce' ) ) {
+        if ( empty( $ajax_nonce ) || ! wp_verify_nonce( $ajax_nonce, 'mhfgfwc_admin_nonce' ) ) {
             wp_send_json_error( [ 'message' => esc_html__( 'Invalid nonce', 'mh-free-gifts-for-woocommerce' ) ], 400 );
         }
 
@@ -694,12 +733,12 @@ class WCFG_Admin {
         // We intentionally use $wpdb writes here; inputs are sanitized and non-user identifiers.
         // phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
         global $wpdb;
-        $table = method_exists( 'WCFG_DB', 'rules_table' ) ? WCFG_DB::rules_table() : $wpdb->prefix . 'wcfg_rules';
+        $table = method_exists( 'MHFGFWC_DB', 'rules_table' ) ? MHFGFWC_DB::rules_table() : $wpdb->prefix . 'mhfgfwc_rules';
         $wpdb->update( $table, [ 'status' => $status ], [ 'id' => $rule_id ] );
         // phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 
-        if ( class_exists( 'WCFG_DB' ) && method_exists( 'WCFG_DB', 'bust_rules_cache' ) ) {
-            WCFG_DB::bust_rules_cache();
+        if ( class_exists( 'MHFGFWC_DB' ) && method_exists( 'MHFGFWC_DB', 'bust_rules_cache' ) ) {
+            MHFGFWC_DB::bust_rules_cache();
         }
 
         wp_send_json_success();
@@ -713,7 +752,7 @@ class WCFG_Admin {
             wp_send_json_error( [ 'message' => esc_html__( 'Insufficient permissions.', 'mh-free-gifts-for-woocommerce' ) ], 403 );
         }
 
-        if ( empty( $_REQUEST['nonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_REQUEST['nonce'] ) ), 'wcfg_admin_nonce' ) ) {
+        if ( empty( $_REQUEST['nonce'] ) || ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_REQUEST['nonce'] ) ), 'mhfgfwc_admin_nonce' ) ) {
             wp_send_json_error( [ 'message' => __( 'Invalid nonce', 'mh-free-gifts-for-woocommerce' ) ], 400 );
         }
 
@@ -738,4 +777,4 @@ class WCFG_Admin {
 }
 
 // Initialize Admin
-WCFG_Admin::instance();
+MHFGFWC_Admin::instance();

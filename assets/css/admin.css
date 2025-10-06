@@ -1,78 +1,78 @@
-/* Admin Styles for WooBuddy Free Gifts */
+/* Admin Styles for MH Free Gifts for WooCommerce */
 
-.free-gifts_page_wcfg_add_rule .wrap .form-table th {
+.free-gifts_page_mhfgfwc_add_rule .wrap .form-table th {
     min-width: 200px;
     vertical-align: top;
     padding-top: 12px;
 }
 
-.free-gifts_page_wcfg_add_rule .wcfg-product-select, .wcfg-user-select {
+.free-gifts_page_mhfgfwc_add_rule .mhfgfwc-product-select, .mhfgfwc-user-select {
     max-width: 600px;
 }
 
 /* Status toggle select styling */
-.free-gifts_page_wcfg_add_rule .wcfg-status-toggle {
+.free-gifts_page_mhfgfwc_add_rule .mhfgfwc-status-toggle {
     width: 100px;
 }
 
 /* Rules list table overrides */
-.free-gifts_page_wcfg_add_rule .widefat .column-actions a.button {
+.free-gifts_page_mhfgfwc_add_rule .widefat .column-actions a.button {
     margin-right: 5px;
 }
 
-.free-gifts_page_wcfg_add_rule .form-table {
+.free-gifts_page_mhfgfwc_add_rule .form-table {
     //background: #fafafa;
 }
 
 /* Gift rule form padding and spacing */
-.free-gifts_page_wcfg_add_rule .form-table tr th {
+.free-gifts_page_mhfgfwc_add_rule .form-table tr th {
     padding: 12px 16px;
 }
 
-.free-gifts_page_wcfg_add_rule .form-table tr td {
+.free-gifts_page_mhfgfwc_add_rule .form-table tr td {
     padding: 12px 16px;
 }
 
 /* Make date-time inputs consistent */
-.free-gifts_page_wcfg_add_rule input[type="datetime-local"].regular-text {
+.free-gifts_page_mhfgfwc_add_rule input[type="datetime-local"].regular-text {
     max-width: 250px;
 }
 
 /* Responsive Select2 container */
-.free-gifts_page_wcfg_add_rule .selection--wcfg-product-select {
+.free-gifts_page_mhfgfwc_add_rule .selection--mhfgfwc-product-select {
     width: 100% !important;
 }
 
 /* Button spacing */
-.free-gifts_page_wcfg_add_rule .page-title-action {
+.free-gifts_page_mhfgfwc_add_rule .page-title-action {
     margin-left: 10px;
 }
 
 /* Highlight required fields */
-.free-gifts_page_wcfg_add_rule .form-table input[required], .form-table select[required] {
+.free-gifts_page_mhfgfwc_add_rule .form-table input[required], .form-table select[required] {
     border-color: #dc3232;
 }
 
-.free-gifts_page_wcfg_add_rule .wcfg-section-title {
+.free-gifts_page_mhfgfwc_add_rule .mhfgfwc-section-title {
     background: #fafafa;
     padding: 15px;
     font-size: 16px;
 }
 
 /* WooBuddy Free Gifts: status toggle switch */
-.wcfg-switch {
+.mhfgfwc-switch {
   position: relative;
   display: inline-block;
   width: 46px;
   height: 24px;
 }
-.wcfg-switch input {
+.mhfgfwc-switch input {
   opacity: 0;
   width: 0;
   height: 0;
   position: absolute;
 }
-.wcfg-slider {
+.mhfgfwc-slider {
   position: absolute;
   cursor: pointer;
   top: 0; left: 0; right: 0; bottom: 0;
@@ -80,7 +80,7 @@
   transition: background-color .3s;
   border-radius: 24px;
 }
-.wcfg-slider:before {
+.mhfgfwc-slider:before {
   position: absolute;
   content: "";
   height: 18px;
@@ -92,14 +92,14 @@
   border-radius: 50%;
 }
 /* When checked → green + move circle */
-.wcfg-switch input:checked + .wcfg-slider {
+.mhfgfwc-switch input:checked + .mhfgfwc-slider {
   background-color: #4caf50;
 }
-.wcfg-switch input:checked + .wcfg-slider:before {
+.mhfgfwc-switch input:checked + .mhfgfwc-slider:before {
   transform: translateX(22px);
 }
 
-body.free-gifts_page_wcfg_add_rule input.small-text, body.free-gifts_page_wcfg_add_rule input[type=number].small-text {
+body.free-gifts_page_mhfgfwc_add_rule input.small-text, body.free-gifts_page_mhfgfwc_add_rule input[type=number].small-text {
     width: 65px;
     padding-right: 0;
 }

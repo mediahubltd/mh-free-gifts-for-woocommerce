@@ -1,6 +1,6 @@
-/* Frontend Styles for Free Gifts for WooCommerce */
+/* Frontend Styles for MH Free Gifts for WooCommerce */
 
-.wcfg-gift-header {
+.mhfgfwc-gift-header {
     font-size: 15px;
     font-weight: bold;
     margin-bottom: 10px;
@@ -13,7 +13,7 @@
 }
 
 /* Gift Selector Container */
-.wcfg-gift-selector {
+.mhfgfwc-gift-selector {
   margin: 20px 0;
   padding: 10px;
   background: #f5f5f5;
@@ -21,32 +21,32 @@
 }
 
 /* Responsive Grid Layout (Cart & Admin) */
-.wcfg-gift-selector .wcfg-grid {
+.mhfgfwc-gift-selector .mhfgfwc-grid {
   display: grid !important;
-  grid-template-columns: repeat(var(--wcfg-items-per-row, 4), 1fr) !important;
+  grid-template-columns: repeat(var(--mhfgfwc-items-per-row, 4), 1fr) !important;
   gap: 15px !important;
 }
 
 /* Gift Item Card */
-.wcfg-gift-item {
+.mhfgfwc-gift-item {
   background: #fff;
   /*border: 1px solid #ddd;*/
   border-radius: 4px;
   padding: 10px;
   text-align: center;
 }
-.wcfg-gift-item .wcfg-thumb img {
+.mhfgfwc-gift-item .mhfgfwc-thumb img {
   max-width: 100%;
   height: auto;
   margin-bottom: 10px;
   border-radius: 4px;    
 }
-.wcfg-gift-item .wcfg-title {
+.mhfgfwc-gift-item .mhfgfwc-title {
   font-weight: bold;
   margin-bottom: 10px;
 }
-.wcfg-gift-item .wcfg-add-gift,
-.wcfg-gift-item .wcfg-remove-gift {
+.mhfgfwc-gift-item .mhfgfwc-add-gift,
+.mhfgfwc-gift-item .mhfgfwc-remove-gift {
   display: inline-block;
   outline: none;
   font-weight: bold;
@@ -62,30 +62,30 @@
   cursor: pointer;
   border-radius: 25px;
 }
-.wcfg-gift-item .wcfg-add-gift:disabled,
-.wcfg-gift-item .wcfg-remove-gift:disabled {
+.mhfgfwc-gift-item .mhfgfwc-add-gift:disabled,
+.mhfgfwc-gift-item .mhfgfwc-remove-gift:disabled {
   background: #ccc;
   cursor: not-allowed;
 }
 
 /* Disabled rule styling */
-.wcfg-disabled-rule {
+.mhfgfwc-disabled-rule {
   opacity: 0.5;
 }
-.wcfg-disabled-rule .wcfg-add-gift {
+.mhfgfwc-disabled-rule .mhfgfwc-add-gift {
   pointer-events: none;
 }
-.wcfg-disabled-rule .wcfg-remove-gift {
+.mhfgfwc-disabled-rule .mhfgfwc-remove-gift {
   /* always allow removal even when disabled */
   pointer-events: auto;
 }
 
 /* Checkout Inline Layout Overrides */
 /* Display gifts line-by-line with small thumbnails */
-.woocommerce .wcfg-gift-section .wcfg-grid {
+.woocommerce .mhfgfwc-gift-section .mhfgfwc-grid {
   display: block !important;
 }
-.woocommerce .wcfg-gift-section .wcfg-gift-item {
+.woocommerce .mhfgfwc-gift-section .mhfgfwc-gift-item {
   display: grid;
   grid-template-columns: 30% 70%;
   grid-auto-rows: auto;
@@ -96,23 +96,23 @@
   margin-bottom: 12px;
   text-align: left;
 }
-.woocommerce .wcfg-gift-section .wcfg-gift-item .wcfg-thumb {
+.woocommerce .mhfgfwc-gift-section .mhfgfwc-gift-item .mhfgfwc-thumb {
   grid-area: thumb;
 }
-.woocommerce .wcfg-gift-section .wcfg-gift-item .wcfg-thumb img {
+.woocommerce .mhfgfwc-gift-section .mhfgfwc-gift-item .mhfgfwc-thumb img {
   width: 70px;
   height: 70px;
   object-fit: cover;
   margin: 0;
 }
-.woocommerce .wcfg-gift-section .wcfg-gift-item .wcfg-title {
+.woocommerce .mhfgfwc-gift-section .mhfgfwc-gift-item .mhfgfwc-title {
   grid-area: title;
   font-weight: normal;
   margin: 0;
   align-self: center;
 }
-.woocommerce .wcfg-gift-section .wcfg-gift-item .wcfg-add-gift,
-.woocommerce .wcfg-gift-section .wcfg-gift-item .wcfg-remove-gift {
+.woocommerce .mhfgfwc-gift-section .mhfgfwc-gift-item .mhfgfwc-add-gift,
+.woocommerce .mhfgfwc-gift-section .mhfgfwc-gift-item .mhfgfwc-remove-gift {
   grid-area: button;
   justify-self: end;
   margin: 0;
@@ -122,26 +122,117 @@
 }
 
 /* Ensure remove-button is always clickable */
-.wcfg-gift-item .wcfg-remove-gift {
+.mhfgfwc-gift-item .mhfgfwc-remove-gift {
   pointer-events: auto;
 }
 
 /* Small screen adjustments */
 @media (max-width: 600px) {
-  .wcfg-gift-selector .wcfg-grid {
+  .mhfgfwc-gift-selector .mhfgfwc-grid {
     grid-template-columns: 1fr !important;
   }
 }
 
 /* Toggle link styling (below coupon) */
-.wcfg-show-gifts-toggle {
+/* Toggle row layout: text left, arrow right */
+.mhfgfwc-show-gifts-toggle {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  text-decoration: none;
   font-size: 18px;
-  font-weight: 500;
+  font-weight:500;
 }
 
+/* Optional: make the icon align nicely */
+.mhfgfwc-toggle-icon {
+  line-height: 1;
+  font-size: 16px;
+}
+
+/* Start hidden handled by JS; keep helper if needed elsewhere */
+.mhfgfwc-hidden { display: none; }
+
+/* (If you use column classes from earlier suggestions) */
+.mhfgfwc-rule-group.mhfgfwc-cols-2 .mhfgfwc-grid { grid-template-columns: repeat(2,1fr); }
+.mhfgfwc-rule-group.mhfgfwc-cols-3 .mhfgfwc-grid { grid-template-columns: repeat(3,1fr); }
+.mhfgfwc-rule-group.mhfgfwc-cols-4 .mhfgfwc-grid { grid-template-columns: repeat(4,1fr); }
+.mhfgfwc-rule-group.mhfgfwc-cols-5 .mhfgfwc-grid { grid-template-columns: repeat(5,1fr); }
+.mhfgfwc-rule-group.mhfgfwc-cols-6 .mhfgfwc-grid { grid-template-columns: repeat(6,1fr); }
+
+
 /* Coupon-toggle wrapper adjustments */
-.woocommerce-form-coupon-toggle.wcfg-toggle {
+.woocommerce-form-coupon-toggle.mhfgfwc-toggle {
   padding-bottom: 20px;
   margin-bottom: 20px;
   border-bottom: 1px solid #eee;
 }
+
+/* WooCommerce Blocks: hide quantity selector for free gifts (items that render our badge) */
+.wc-block-cart-items .wc-block-cart-item:has(.mhfgfwc-badge) .wc-block-components-quantity-selector,
+.wc-block-checkout__review-order .wc-block-cart-item:has(.mhfgfwc-badge) .wc-block-components-quantity-selector {
+  display: none !important;
+}
+
+/* Optional: show a small “Qty 1” label so the layout doesn’t jump */
+.wc-block-cart-items .wc-block-cart-item:has(.mhfgfwc-badge) .mhfgfwc-fixed-qty,
+.wc-block-checkout__review-order .wc-block-cart-item:has(.mhfgfwc-badge) .mhfgfwc-fixed-qty {
+  display: inline-block;
+  font-size: .9em;
+  opacity: .75;
+  margin-left: .25rem;
+}
+/* Blocks: visual polish for fixed-qty gifts */
+.wc-block-cart-item.is-mhfgfwc-gift .mhfgfwc-fixed-qty {
+  display: inline-block;
+  margin-left: .35rem;
+  font-size: .9em;
+  opacity: .75;
+}
+/* Blocks: visual polish for fixed-qty gifts */
+.wc-block-cart-items__row.is-mhfgfwc-gift .mhfgfwc-fixed-qty {
+  display: inline-block;
+  margin-right: .5rem;
+  font-size: .9em;
+  opacity: .75;
+}
+.mhfgfwc-blocks-panel { width: 100%; display:block; }
+/* Checkout-only layout (slot gets .mhfgfwc--checkout on checkout) */
+.mhfgfwc--checkout .mhfgfwc-grid {
+  display: grid;
+  grid-template-columns: 1fr;   /* stack items */
+  row-gap: 12px;
+}
+
+/* Make each gift row look like the summary rows */
+.mhfgfwc--checkout .mhfgfwc-gift-item {
+  display: grid;
+  grid-template-columns: 64px 1fr auto; /* thumb | title | action */
+  align-items: center;
+  column-gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--wc-blocks-border, rgba(0,0,0,.06));
+}
+
+.mhfgfwc--checkout .mhfgfwc-gift-item:last-child {
+  border-bottom: 0;
+}
+
+.mhfgfwc--checkout .mhfgfwc-thumb img {
+  width: 64px;
+  height: 64px;
+  object-fit: cover;
+  display: block;
+}
+
+.mhfgfwc--checkout .mhfgfwc-title {
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.mhfgfwc--checkout .mhfgfwc-add-gift,
+.mhfgfwc--checkout .mhfgfwc-remove-gift {
+  white-space: nowrap;
+  margin-left: 12px;
+}
+

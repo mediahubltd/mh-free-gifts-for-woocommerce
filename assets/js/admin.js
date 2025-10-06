@@ -3,57 +3,59 @@ jQuery(function($) {
    * Initialize SelectWoo on product and user selector fields
    */
   function initWcfgSelects() {
-    $('.wcfg-product-select, .wcfg-user-select').each(function() {
-      var $select = $(this);
-      if ($select.hasClass('select2-hidden-accessible')) return;
+      $('.mhfgfwc-product-select, .mhfgfwc-user-select').each(function () {
+        var $select = $(this);
+        if ($select.hasClass('select2-hidden-accessible')) return;
 
-      // Use WooCommerce's SelectWoo instead of select2
-      $select.selectWoo({
-        placeholder: $select.data('placeholder') || ($select.hasClass('wcfg-user-select') ? 'Search for a user...' : 'Search for a product...'),
-        minimumInputLength: 2,
-        ajax: {
-          url: wcfgAdmin.ajax_url,
-          dataType: 'json',
-          delay: 250,
-          data: function(params) {
-            return {
-              action: $select.hasClass('wcfg-user-select') ? 'wcfg_search_users' : 'wcfg_search_products',
-              nonce:  wcfgAdmin.nonce,
-              q:      params.term
-            };
-          },
-          processResults: function(response) {
-            if (response.success && Array.isArray(response.data)) {
-              return { results: response.data };
+        $select.selectWoo({
+          placeholder: $select.data('placeholder') || ($select.hasClass('mhfgfwc-user-select') ? 'Search for a user...' : 'Search for a product...'),
+          minimumInputLength: 2,
+          ajax: {
+            url: mhfgfwcAdmin.ajax_url,
+            dataType: 'json',
+            delay: 250,
+            data: function (params) {
+              return {
+                action: $select.hasClass('mhfgfwc-user-select') ? 'mhfgfwc_search_users' : 'mhfgfwc_search_products',
+                nonce:  mhfgfwcAdmin.nonce,
+                q:      params.term
+              };
+            },
+            processResults: function (response) {
+              return (response.success && Array.isArray(response.data)) ? { results: response.data } : { results: [] };
             }
-            return { results: [] };
           }
+        });
+
+        // If PHP rendered no <option selected>, ensure the widget shows empty too.
+        if (!$select.find('option:selected').length) {
+          $select.val(null).trigger('change.select2');
         }
       });
-    });
-  }
+    }
+
 
   // On initial load
   initWcfgSelects();
 
   // Re-initialize on focus or when new rows are added
-  $(document).on('focus', '.wcfg-product-select, .wcfg-user-select', initWcfgSelects);
-  $(document).on('wcfg_after_add_row', initWcfgSelects);
+  $(document).on('focus', '.mhfgfwc-product-select, .mhfgfwc-user-select', initWcfgSelects);
+  $(document).on('mhfgfwc_after_add_row', initWcfgSelects);
 
   // Handle status toggle inline change
-  $(document).on('change', '.wcfg-status-toggle', function() {
+  $(document).on('change', '.mhfgfwc-status-toggle', function() {
     var $chk = $(this);
     var status = $chk.prop('checked') ? 1 : 0;
-    $.post(wcfgAdmin.ajax_url, {
-      action:  'wcfg_toggle_status',
-      nonce:   wcfgAdmin.nonce,
+    $.post(mhfgfwcAdmin.ajax_url, {
+      action:  'mhfgfwc_toggle_status',
+      nonce:   mhfgfwcAdmin.nonce,
       rule_id: $chk.data('rule-id'),
       status:  status
     });
   });
 
   // Initialize datepicker/timepicker
-  $('.wcfg-datepicker').datetimepicker({
+  $('.mhfgfwc-datepicker').datetimepicker({
     dateFormat:   'yy-mm-dd',
     timeFormat:   'HH:mm',
     showSecond:   false,
