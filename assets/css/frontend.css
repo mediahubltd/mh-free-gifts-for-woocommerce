@@ -235,4 +235,6 @@
   white-space: nowrap;
   margin-left: 12px;
 }
+.mhfgfwc-is-gift .wc-block-components-quantity-selector__button { pointer-events: none; opacity: .5; }
+.mhfgfwc-qty-locked { pointer-events: none; }
 

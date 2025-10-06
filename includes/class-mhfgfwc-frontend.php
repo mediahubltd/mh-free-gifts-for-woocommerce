@@ -121,6 +121,7 @@ final class MHFGFWC_Frontend {
               'renderUrl'    => admin_url( 'admin-ajax.php?action=mhfgfwc_render_gifts' ),
               'addUrl'       => WC_AJAX::get_endpoint( 'mhfgfwc_add_gift' ),
               'removeUrl'    => WC_AJAX::get_endpoint( 'mhfgfwc_remove_gift' ),
+              'i18nFreeGift' => __( 'Free gift', 'mh-free-gifts-for-woocommerce' ),
               'nonce'        => wp_create_nonce( 'mhfgfwc_frontend_nonce' ),
             ]);
 
