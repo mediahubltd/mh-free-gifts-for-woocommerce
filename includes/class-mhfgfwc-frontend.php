@@ -315,11 +315,18 @@ final class MHFGFWC_Frontend {
         $session_key = apply_filters( 'mhfgfwc_session_key', 'mhfgfwc_available_gifts' );
         $map = WC()->session->get( $session_key, array() );
 
-        if ( ! empty( $map ) ) {
+        // 🔁 Compare global rules revision to the one stored in session
+        $global_rev  = (int) get_option( 'mhfgfwc_rules_rev', 0 );
+        $session_rev = (int) WC()->session->get( 'mhfgfwc_rules_rev', 0 );
+
+        // If we already have a map and the revision matches, keep it
+        if ( ! empty( $map ) && $global_rev === $session_rev ) {
             return $map;
         }
-
+        
         if ( ! class_exists( 'MHFGFWC_DB' ) ) {
+            // Still update rev so we don’t keep rebuilding pointlessly
+            WC()->session->set( 'mhfgfwc_rules_rev', $global_rev );
             return array();
         }
 
@@ -345,7 +352,9 @@ final class MHFGFWC_Frontend {
             );
         }
 
+        // ✅ Save both the map and the revision into the session
         WC()->session->set( $session_key, $built );
+        WC()->session->set( 'mhfgfwc_rules_rev', $global_rev );
         return $built;
     }
     

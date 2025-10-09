@@ -2,21 +2,66 @@
 Contributors: mediahub
 Plugin URI: https://www.mediahubsolutions.com/mh-free-gifts-for-woocommerce/
 Description: Let customers choose a free gift when cart criteria are met (threshold, qty, dependencies).
-Tags: woocommerce, free gift, promotions, cart rules, checkout rules
+Tags: free gifts for woocommerce, buy one get one, free gift, Gift Product Woocommerce, WooCommerce gift
 Requires at least: 6.0
 Tested up to: 6.8
-Stable tag: 1.0.4
-Version: 1.0.4
+Stable tag: 1.0.5
+Version: 1.0.5
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
+Donate link: https://ko-fi.com/adk77
 
-MH Free Gifts for WooCommerce gives store owners a powerful yet intuitive way to reward customers with a choice of complimentary products.
+Offer free gifts automatically in WooCommerce! Set up smart rules based on cart value, items, or user roles — fully supports WooCommerce Blocks.
 
 == Description ==
 
-MH Free Gifts for WooCommerce gives store owners a powerful yet intuitive way to reward customers with a choice of complimentary products. In the admin area, you can define multiple “gift rules”—each with its own name, description, date range, user- or product-dependencies, usage limits, cart subtotal/quantity conditions, and gift-selection options. A sleek toggle switch lets you activate or disable any rule on the fly, and AJAX-powered SelectWoo pickers make it effortless to search and assign products or specific users. All data is stored in a dedicated database table for maximum performance and portability.
+**MH Free Gifts for WooCommerce** gives store owners a powerful yet intuitive way to reward customers with complimentary products based on custom cart rules.
 
-On the storefront, customers who meet your criteria will see a responsive, grid-based “Choose Your Free Gift” section on the cart (and optionally checkout) page. They can click to add their selected gift directly—automatically applied at $0—and the system enforces per-rule and per-user limits. Behind the scenes, session and usage-tracking ensure rules aren’t abused, while the engine efficiently evaluates cart contents and applies discounts before totals are calculated. The result is a fully self-contained plugin that seamlessly extends WooCommerce’s promotion capabilities without clutter or conflict.
+### ✨ Key Features
+
+* 🎁 **Add Multiple Free Gift Rules** — create unlimited gift rules with different conditions and products.
+* ⚙️ **Smart Rule Conditions & Limits** — restrict by subtotal, quantity, date range, product, or user.
+* 🧩 **WooCommerce Blocks Support** — compatible with both classic and block-based cart and checkout.
+* 🚀 **Lightweight & Optimized** — uses a dedicated database table for speed and reliability.
+* 💯 **Completely Free** — no upsells or pro version. 100% functional out of the box.
+
+### 🛒 How It Works
+
+1. Define your free gift rules in the admin — choose eligible products, usage limits, and visibility options.  
+2. Customers who qualify see a responsive **“Choose Your Free Gift”** section on the cart (and optionally checkout) page.  
+3. When a gift is selected, it’s automatically added to the cart at $0.  
+4. MH Free Gifts handles all validation and limits automatically.
+
+Behind the scenes, the plugin intelligently evaluates cart contents, enforces limits, and prevents abuse — creating a **seamless, self-contained gifting experience** that enhances WooCommerce’s promotion capabilities without extra plugins or conflicts.
+
+###Free Gift Admin settings
+
+General Settings
+* **Status** (Active or Disabled)
+* **Rule Name** (name it something meaningful) - only for admin use
+* **Description** (describe your rule) - only for admin use
+* **Select Gifts** (Select 1 or more gifts you would like in your gift rule)
+Display Settings
+* **Display Gift On** (Toggle between Cart or Cart/Checkout mode)
+* **Items Per Row (Cart)** (decide how many items in a row you want displayed)
+Usage Restrictions
+* **Product Dependency** (Lock down rule to only allow free gifts to activate if any of these products are in the cart)
+* **User Dependency** (Limit he rule to individual customers)
+* **Registered Users** Only (Only allowed existing customers to activate the rule)
+* **Number of Gifts Allowed** (Restrict the number of gifts a customer can add to their cart)
+* **Cart Subtotal** (Is Less Than, Is Greater Than, Is Less Than or Equal To, Is Greater Than or Equal To, Is Equal To) Set you Subtotal threshold amount
+* **Cart Quantity** (Is Less Than, Is Greater Than, Is Less Than or Equal To, Is Greater Than or Equal To, Is Equal To) Set you Quantity threshold amount
+* **Valid From** (Set valid from date)
+* **Valid To** (Set valid to date)
+Usage Limits
+* **Usage Limit per Rule** (Limits how many time the gift rule can be used)
+* **Uaage Limit per User** (Limits how many times an individual user can use the gift rule)
+
+
+== Screenshots ==
+1. The “Choose Your Free Gift” section on the WooCommerce cart page.
+2. Free Gift section at checkout. Can remove & add gifts here also.
+3. Add/Edit Rule page in Admin
 
 == Installation ==
 
@@ -30,11 +75,25 @@ On the storefront, customers who meet your criteria will see a responsive, grid-
 
 == Frequently Asked Questions ==
 
-= What do I do if I need help? =
+= Does it work with WooCommerce Blocks? =
+Yes — MH Free Gifts for WooCommerce fully supports the latest WooCommerce Cart and Checkout blocks.
 
+= Can I create multiple gift rules? =
+Absolutely! You can define unlimited rules, each with unique conditions and eligible products.
+
+= Can I limit gifts per user or order? =
+Yes — the plugin supports per-user and per-rule usage limits.
+
+= Is it really free? =
+Yes! There’s no premium version or upsells. Everything is included for free.
+
+= What do I do if I need help? =
 Support is provided via the WordPress.org forums or through the Mediahub support site.
 
 == Changelog ==
+
+= 1.0.5 (2025-10-08) =
+* [Fixed] Plugin icon change
 
 = 1.0.4 (2025-10-06) =
 * [Added] Added Support for Woocommerce Blocks

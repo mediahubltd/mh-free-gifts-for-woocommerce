@@ -43,16 +43,49 @@ jQuery(function($) {
   $(document).on('mhfgfwc_after_add_row', initWcfgSelects);
 
   // Handle status toggle inline change
-  $(document).on('change', '.mhfgfwc-status-toggle', function() {
-    var $chk = $(this);
-    var status = $chk.prop('checked') ? 1 : 0;
-    $.post(mhfgfwcAdmin.ajax_url, {
-      action:  'mhfgfwc_toggle_status',
-      nonce:   mhfgfwcAdmin.nonce,
-      rule_id: $chk.data('rule-id'),
-      status:  status
+    
+    $(document).on('change', '.mhfgfwc-status-toggle', function () {
+        const $cb      = $(this);
+        const ruleId   = $cb.data('rule-id');
+        const checked  = $cb.is(':checked');     // desired state
+        const previous = !checked;               // for revert
+        const payload  = {
+          action:  'mhfgfwc_toggle_status',
+          nonce:   (window.mhfgfwcAdmin && mhfgfwcAdmin.nonce) ? mhfgfwcAdmin.nonce : '',
+          rule_id: ruleId,
+          status:  checked ? 1 : 0
+        };
+
+        // lock UI
+        $cb.prop('disabled', true).addClass('is-saving');
+
+        $.ajax({
+          url:    (window.mhfgfwcAdmin && mhfgfwcAdmin.ajax_url) ? mhfgfwcAdmin.ajax_url : ajaxurl,
+          method: 'POST',
+          data:   payload,
+          dataType: 'json'
+        })
+        .done(function (resp) {
+          if (!resp || resp.success !== true) {
+            // server reported failure
+            $cb.prop('checked', previous);
+            window.alert('Could not update status. Please try again.');
+            return;
+          }
+          // optional: lightweight confirmation
+          if (window.wp && wp.a11y && typeof wp.a11y.speak === 'function') {
+            wp.a11y.speak('Rule status saved.');
+          }
+        })
+        .fail(function () {
+          // network or server error
+          $cb.prop('checked', previous);
+          window.alert('Network error saving status. Please try again.');
+        })
+        .always(function () {
+          $cb.prop('disabled', false).removeClass('is-saving');
+        });
     });
-  });
 
   // Initialize datepicker/timepicker
   $('.mhfgfwc-datepicker').datetimepicker({

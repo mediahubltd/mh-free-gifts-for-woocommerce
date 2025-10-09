@@ -1,6 +1,6 @@
 <?php
 /**
- * Admin UI for WooBuddy Free Gifts
+ * Admin UI for MH Free Gifts for WooCommerce
  */
 
 if ( ! defined( 'ABSPATH' ) ) {
@@ -45,7 +45,7 @@ class MHFGFWC_Admin {
             'manage_options',
             'mhfgfwc_rules',
             [ $this, 'render_rules_list' ],
-            MHFGFWC_PLUGIN_URL . 'assets/images/mhfgfwc-menu-icon.svg',
+            'dashicons-cart', 
             56
         );
 
@@ -740,6 +740,13 @@ class MHFGFWC_Admin {
         if ( class_exists( 'MHFGFWC_DB' ) && method_exists( 'MHFGFWC_DB', 'bust_rules_cache' ) ) {
             MHFGFWC_DB::bust_rules_cache();
         }
+        
+        // Clear admin-page caches so the list & edit screens reflect immediately
+        wp_cache_delete( 'mhfgfwc_admin_rules_list_v1', 'mhfgfwc' );
+        wp_cache_delete( 'mhfgfwc_admin_rule_' . (int) $rule_id, 'mhfgfwc' );
+
+        // Bump a “rules revision” for frontend sessions
+        update_option( 'mhfgfwc_rules_rev', time() );
 
         wp_send_json_success();
     }
