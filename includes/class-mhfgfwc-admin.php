@@ -186,14 +186,15 @@ class MHFGFWC_Admin {
             return;
         }
 
-        wp_register_script(
+        wp_enqueue_style( 'wp-color-picker' );
+        wp_enqueue_script( 'wp-color-picker' );
+        wp_enqueue_script(
             'mhfgfwc-admin-preview',
             MHFGFWC_PLUGIN_URL . 'assets/js/admin-preview.js',
-            [ 'jquery' ],
+            [ 'jquery', 'wp-color-picker' ],
             MHFGFWC_VERSION,
             true
         );
-        wp_enqueue_script( 'mhfgfwc-admin-preview' );
     }
 
 
@@ -984,8 +985,8 @@ class MHFGFWC_Admin {
         $opt = get_option( 'mhfgfwc_button_styles', [] );
         $def = [
             'text_color'   => '#ffffff',
-            'bg_color'     => '#0071a1',
-            'border_color' => '#0071a1',
+            'bg_color'     => '#000000',
+            'border_color' => '#000000',
             'border_size'  => 2,
             'radius'       => 25,
         ];
@@ -995,25 +996,34 @@ class MHFGFWC_Admin {
     public function field_text_color() {
         $o = $this->get_button_styles();
         printf(
-            '<input type="text" id="mhfgfwc_text_color" name="mhfgfwc_button_styles[text_color]" value="%s" class="regular-text" placeholder="#ffffff" />',
+            '<input type="text" id="mhfgfwc_text_color" name="mhfgfwc_button_styles[text_color]" value="%s" class="regular-text mhfgfwc-color" placeholder="#ffffff" />',
             esc_attr( $o['text_color'] )
         );
+        echo '<p class="description">' .
+            esc_html__( 'Default: #ffffff (white). Sets the text color inside your “Add Gift” / “Remove Gift” buttons.', 'mh-free-gifts-for-woocommerce' ) .
+        '</p>';
     }
 
     public function field_bg_color() {
         $o = $this->get_button_styles();
         printf(
-            '<input type="text" id="mhfgfwc_bg_color" name="mhfgfwc_button_styles[bg_color]" value="%s" class="regular-text" placeholder="#0071a1" />',
+            '<input type="text" id="mhfgfwc_bg_color" name="mhfgfwc_button_styles[bg_color]" value="%s" class="regular-text mhfgfwc-color" placeholder="#0071a1" />',
             esc_attr( $o['bg_color'] )
         );
+        echo '<p class="description">' .
+            esc_html__( 'Default: #000000 (black). The button background color. You can also leave it blank to use your theme’s accent color (var(--accent-color)).', 'mh-free-gifts-for-woocommerce' ) .
+        '</p>';
     }
 
     public function field_border_color() {
         $o = $this->get_button_styles();
         printf(
-            '<input type="text" id="mhfgfwc_border_color" name="mhfgfwc_button_styles[border_color]" value="%s" class="regular-text" placeholder="#0071a1" />',
+            '<input type="text" id="mhfgfwc_border_color" name="mhfgfwc_button_styles[border_color]" value="%s" class="regular-text mhfgfwc-color" placeholder="#0071a1" />',
             esc_attr( $o['border_color'] )
         );
+        echo '<p class="description">' .
+            esc_html__( 'Default: #000000 (black). Defines the outline color. You can clear this field to fall back to your theme’s accent color.', 'mh-free-gifts-for-woocommerce' ) .
+        '</p>';
     }
 
     public function field_border_size() {
@@ -1022,7 +1032,9 @@ class MHFGFWC_Admin {
             '<input type="number" id="mhfgfwc_border_size" name="mhfgfwc_button_styles[border_size]" value="%d" min="0" max="12" class="small-text" />',
             (int) $o['border_size']
         );
-        echo ' <span class="description">' . esc_html__( 'Pixels', 'mh-free-gifts-for-woocommerce' ) . '</span>';
+        echo ' <span class="description">' .
+            esc_html__( 'Pixels (default: 2). Controls the border thickness of your buttons.', 'mh-free-gifts-for-woocommerce' ) .
+        '</span>';
     }
 
     public function field_radius() {
@@ -1031,10 +1043,12 @@ class MHFGFWC_Admin {
             '<input type="number" id="mhfgfwc_radius" name="mhfgfwc_button_styles[radius]" value="%d" min="0" max="50" class="small-text" />',
             (int) $o['radius']
         );
-        echo ' <span class="description">' . esc_html__( 'Pixels', 'mh-free-gifts-for-woocommerce' ) . '</span>';
+        echo ' <span class="description">' .
+            esc_html__( 'Pixels (default: 25). Adjusts how rounded the button corners are.', 'mh-free-gifts-for-woocommerce' ) .
+        '</span>';
     }
 
-
+    
 }
 
 // Initialize Admin

@@ -70,8 +70,8 @@ final class MHFGFWC_Frontend {
         $opt = get_option( 'mhfgfwc_button_styles', [] );
         $opt = wp_parse_args( is_array( $opt ) ? $opt : [], [
             'text_color'   => '#ffffff',
-            'bg_color'     => '#0071a1',
-            'border_color' => '#0071a1',
+            'bg_color'     => '#000000',
+            'border_color' => '#000000',
             'border_size'  => 2,
             'radius'       => 25,
         ] );
@@ -90,8 +90,6 @@ final class MHFGFWC_Frontend {
             (int) $opt['radius']
         );
         wp_add_inline_style( 'mhfgfwc-frontend', $css );
-
-
 
 
         // --- Shared Classic JS (safe everywhere) ---
