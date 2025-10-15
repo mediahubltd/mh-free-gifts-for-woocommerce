@@ -16,6 +16,7 @@ class MHFGFWC_Admin {
      */
     private $menu_hook = '';
     private $submenu_hook = '';
+    private $settings_hook = '';
 
     public static function instance() {
         if ( ! self::$instance ) {
@@ -27,6 +28,8 @@ class MHFGFWC_Admin {
     private function __construct() {
         add_action( 'admin_menu', [ $this, 'register_menu' ] );
         add_action( 'admin_enqueue_scripts', [ $this, 'enqueue_assets' ] );
+        add_action( 'admin_init', [ $this, 'register_settings' ] );
+        add_action( 'admin_enqueue_scripts',   [ $this, 'enqueue_settings_assets' ] );
 
         // Mutations
         add_action( 'admin_post_mhfgfwc_save_rule',   [ $this, 'save_rule' ] );
@@ -57,6 +60,16 @@ class MHFGFWC_Admin {
             'mhfgfwc_add_rule',
             [ $this, 'render_rule_form' ]
         );
+        
+        $this->settings_hook = add_submenu_page(
+            'mhfgfwc_rules',
+            __( 'Free Gifts Settings', 'mh-free-gifts-for-woocommerce' ),
+            __( 'Settings', 'mh-free-gifts-for-woocommerce' ),
+            'manage_options',
+            'mhfgfwc_settings',
+            [ $this, 'render_settings_page' ]
+        );
+
     }
 
     /**
@@ -64,7 +77,7 @@ class MHFGFWC_Admin {
      */
     public function enqueue_assets( $hook ) {
         // Bail if not one of our pages.
-        if ( $hook !== $this->menu_hook && $hook !== $this->submenu_hook ) {
+        if ( $hook !== $this->menu_hook && $hook !== $this->submenu_hook && $hook !== $this->settings_hook ) {
             return;
         }
 
@@ -167,6 +180,22 @@ class MHFGFWC_Admin {
         }';
         wp_add_inline_style( 'mhfgfwc-admin', $inline_admin_css );
     }
+    
+    public function enqueue_settings_assets( $hook ) {
+        if ( $hook !== $this->settings_hook ) {
+            return;
+        }
+
+        wp_register_script(
+            'mhfgfwc-admin-preview',
+            MHFGFWC_PLUGIN_URL . 'assets/js/admin-preview.js',
+            [ 'jquery' ],
+            MHFGFWC_VERSION,
+            true
+        );
+        wp_enqueue_script( 'mhfgfwc-admin-preview' );
+    }
+
 
     /**
      * List of rules (cached briefly to keep admin snappy)
@@ -781,6 +810,231 @@ class MHFGFWC_Admin {
 
         wp_send_json_success( $results );
     }
+    
+    public function register_settings() {
+        register_setting(
+            'mhfgfwc_settings',
+            'mhfgfwc_button_styles',
+            [
+                'type'              => 'array',
+                'sanitize_callback' => [ $this, 'sanitize_button_styles' ],
+                'default'           => [
+                    'text_color'   => '#ffffff',
+                    'bg_color'     => '#0071a1',
+                    'border_color' => '#0071a1',
+                    'border_size'  => 2,
+                    'radius'       => 25,
+                ],
+            ]
+        );
+
+        add_settings_section(
+            'mhfgfwc_buttons_section',
+            __( 'Button Styles', 'mh-free-gifts-for-woocommerce' ),
+            function () {
+                echo '<p>' . esc_html__( 'Customize how “Add Gift” / “Remove Gift” buttons look across cart & checkout.', 'mh-free-gifts-for-woocommerce' ) . '</p>';
+            },
+            'mhfgfwc_settings'
+        );
+
+        add_settings_field(
+            'mhfgfwc_text_color',
+            __( 'Button Text Color', 'mh-free-gifts-for-woocommerce' ),
+            [ $this, 'field_text_color' ],
+            'mhfgfwc_settings',
+            'mhfgfwc_buttons_section'
+        );
+
+        add_settings_field(
+            'mhfgfwc_bg_color',
+            __( 'Button Background Color', 'mh-free-gifts-for-woocommerce' ),
+            [ $this, 'field_bg_color' ],
+            'mhfgfwc_settings',
+            'mhfgfwc_buttons_section'
+        );
+
+        add_settings_field(
+            'mhfgfwc_border_color',
+            __( 'Button Border Color', 'mh-free-gifts-for-woocommerce' ),
+            [ $this, 'field_border_color' ],
+            'mhfgfwc_settings',
+            'mhfgfwc_buttons_section'
+        );
+
+        add_settings_field(
+            'mhfgfwc_border_size',
+            __( 'Border Size (px)', 'mh-free-gifts-for-woocommerce' ),
+            [ $this, 'field_border_size' ],
+            'mhfgfwc_settings',
+            'mhfgfwc_buttons_section'
+        );
+
+        add_settings_field(
+            'mhfgfwc_radius',
+            __( 'Border Radius (px)', 'mh-free-gifts-for-woocommerce' ),
+            [ $this, 'field_radius' ],
+            'mhfgfwc_settings',
+            'mhfgfwc_buttons_section'
+        );
+    }
+
+    public function sanitize_button_styles( $input ) {
+        $out = [];
+
+        $out['text_color']   = isset( $input['text_color'] )   ? sanitize_hex_color( $input['text_color'] )   : '#ffffff';
+        $out['bg_color']     = isset( $input['bg_color'] )     ? sanitize_hex_color( $input['bg_color'] )     : '#0071a1';
+        $out['border_color'] = isset( $input['border_color'] ) ? sanitize_hex_color( $input['border_color'] ) : '#0071a1';
+
+        $out['border_size']  = isset( $input['border_size'] ) ? max( 0, min( 12, absint( $input['border_size'] ) ) ) : 2;
+        $out['radius']       = isset( $input['radius'] )      ? max( 0, min( 50,  absint( $input['radius'] ) ) )      : 25;
+
+        // Fallback for any invalid hex colors
+        foreach ( ['text_color','bg_color','border_color'] as $k ) {
+            if ( empty( $out[ $k ] ) ) {
+                $out[ $k ] = ( 'text_color' === $k ) ? '#ffffff' : '#0071a1';
+            }
+        }
+
+        return $out;
+    }
+
+
+    public function render_color_field( $args ) {
+        $opts = (array) get_option( 'mhfgfwc_settings', [] );
+        $key  = (string) $args['key'];
+        $val  = isset( $opts[ $key ] ) ? (string) $opts[ $key ] : (string) ( $args['default'] ?? '' );
+
+        printf(
+            '<input type="text" class="regular-text" name="mhfgfwc_settings[%1$s]" value="%2$s" placeholder="%3$s" pattern="^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$" />',
+            esc_attr( $key ),
+            esc_attr( $val ),
+            esc_attr__( '#RRGGBB (leave empty to inherit theme accent)', 'mh-free-gifts-for-woocommerce' )
+        );
+        if ( '' === $val ) {
+            echo '<p class="description">' . esc_html__( 'Empty will use your theme accent color (or fall back to #0071a1).', 'mh-free-gifts-for-woocommerce' ) . '</p>';
+        }
+    }
+
+    public function render_radius_field( $args ) {
+        $opts = (array) get_option( 'mhfgfwc_settings', [] );
+        $key  = (string) $args['key'];
+        $val  = isset( $opts[ $key ] ) ? (int) $opts[ $key ] : (int) ( $args['default'] ?? 25 );
+
+        printf(
+            '<input type="number" class="small-text" min="0" max="64" name="mhfgfwc_settings[%1$s]" value="%2$d" /> %3$s',
+            esc_attr( $key ),
+            esc_attr( $val ),
+            esc_html__( 'px', 'mh-free-gifts-for-woocommerce' )
+        );
+    }
+
+    public function render_settings_page() {
+        if ( ! current_user_can( 'manage_options' ) ) {
+            return;
+        }
+
+        $o = $this->get_button_styles();
+
+        echo '<div class="wrap">';
+        echo '<h1>' . esc_html__( 'Free Gifts Settings', 'mh-free-gifts-for-woocommerce' ) . '</h1>';
+
+        // Live preview (reflects current inputs before save via JS)
+        $style_attr = sprintf(
+            'color:%1$s;background:%2$s;border:%3$dpx solid %4$s;border-radius:%5$dpx;',
+            esc_attr( $o['text_color'] ),
+            esc_attr( $o['bg_color'] ),
+            (int) $o['border_size'],
+            esc_attr( $o['border_color'] ),
+            (int) $o['radius']
+        );
+
+        echo '<hr style="margin:24px 0;">';
+        echo '<h2>' . esc_html__( 'Live Preview', 'mh-free-gifts-for-woocommerce' ) . '</h2>';
+        echo '<p class="description">' . esc_html__( 'This is how your buttons will look on the frontend.', 'mh-free-gifts-for-woocommerce' ) . '</p>';
+
+        echo '<div id="mhfgfwc-preview" style="display:flex;gap:12px;align-items:center;">';
+        echo '  <a href="#" class="button mhfgfwc-preview-btn" style="' . esc_attr( $style_attr ) . '">' . esc_html__( 'Add Gift', 'mh-free-gifts-for-woocommerce' ) . '</a>';
+        echo '  <a href="#" class="button mhfgfwc-preview-btn" style="' . esc_attr( $style_attr ) . '">' . esc_html__( 'Remove Gift', 'mh-free-gifts-for-woocommerce' ) . '</a>';
+        echo '</div>';
+        
+        echo '<form action="' . esc_url( admin_url( 'options.php' ) ) . '" method="post">';
+        settings_fields( 'mhfgfwc_settings' );
+        do_settings_sections( 'mhfgfwc_settings' );
+        submit_button();
+        echo '</form>';
+
+        echo '</div>'; // .wrap
+    }
+
+    
+    public function render_border_size_field( $args ) {
+        $opts = (array) get_option( 'mhfgfwc_settings', [] );
+        $key  = (string) $args['key'];
+        $val  = isset( $opts[ $key ] ) ? (int) $opts[ $key ] : (int) ( $args['default'] ?? 2 );
+
+        printf(
+            '<input type="number" class="small-text" min="0" max="10" name="mhfgfwc_settings[%1$s]" value="%2$d" /> %3$s',
+            esc_attr( $key ),
+            esc_html( $val ),
+            esc_html__( 'px', 'mh-free-gifts-for-woocommerce' )
+        );
+    }
+    
+    private function get_button_styles() {
+        $opt = get_option( 'mhfgfwc_button_styles', [] );
+        $def = [
+            'text_color'   => '#ffffff',
+            'bg_color'     => '#0071a1',
+            'border_color' => '#0071a1',
+            'border_size'  => 2,
+            'radius'       => 25,
+        ];
+        return wp_parse_args( is_array( $opt ) ? $opt : [], $def );
+    }
+
+    public function field_text_color() {
+        $o = $this->get_button_styles();
+        printf(
+            '<input type="text" id="mhfgfwc_text_color" name="mhfgfwc_button_styles[text_color]" value="%s" class="regular-text" placeholder="#ffffff" />',
+            esc_attr( $o['text_color'] )
+        );
+    }
+
+    public function field_bg_color() {
+        $o = $this->get_button_styles();
+        printf(
+            '<input type="text" id="mhfgfwc_bg_color" name="mhfgfwc_button_styles[bg_color]" value="%s" class="regular-text" placeholder="#0071a1" />',
+            esc_attr( $o['bg_color'] )
+        );
+    }
+
+    public function field_border_color() {
+        $o = $this->get_button_styles();
+        printf(
+            '<input type="text" id="mhfgfwc_border_color" name="mhfgfwc_button_styles[border_color]" value="%s" class="regular-text" placeholder="#0071a1" />',
+            esc_attr( $o['border_color'] )
+        );
+    }
+
+    public function field_border_size() {
+        $o = $this->get_button_styles();
+        printf(
+            '<input type="number" id="mhfgfwc_border_size" name="mhfgfwc_button_styles[border_size]" value="%d" min="0" max="12" class="small-text" />',
+            (int) $o['border_size']
+        );
+        echo ' <span class="description">' . esc_html__( 'Pixels', 'mh-free-gifts-for-woocommerce' ) . '</span>';
+    }
+
+    public function field_radius() {
+        $o = $this->get_button_styles();
+        printf(
+            '<input type="number" id="mhfgfwc_radius" name="mhfgfwc_button_styles[radius]" value="%d" min="0" max="50" class="small-text" />',
+            (int) $o['radius']
+        );
+        echo ' <span class="description">' . esc_html__( 'Pixels', 'mh-free-gifts-for-woocommerce' ) . '</span>';
+    }
+
+
 }
 
 // Initialize Admin

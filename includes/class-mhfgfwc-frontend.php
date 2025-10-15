@@ -65,6 +65,34 @@ final class MHFGFWC_Frontend {
             [ 'dashicons' ],
             file_exists( $css_path ) ? filemtime( $css_path ) : MHFGFWC_VERSION
         );
+        
+        // Dynamic button CSS from settings
+        $opt = get_option( 'mhfgfwc_button_styles', [] );
+        $opt = wp_parse_args( is_array( $opt ) ? $opt : [], [
+            'text_color'   => '#ffffff',
+            'bg_color'     => '#0071a1',
+            'border_color' => '#0071a1',
+            'border_size'  => 2,
+            'radius'       => 25,
+        ] );
+
+        $css = sprintf(
+            '.mhfgfwc-btn, .mhfgfwc-gift-item .mhfgfwc-add-gift, .mhfgfwc-gift-item .mhfgfwc-remove-gift{' .
+                'color:%1$s;background:%2$s;border:%3$dpx solid %4$s;border-radius:%5$dpx;' .
+            '}' .
+            '.mhfgfwc-gift-item .mhfgfwc-add-gift:disabled, .mhfgfwc-gift-item .mhfgfwc-remove-gift:disabled{' .
+                'background:#ccc;border-color:#ccc;color:#666;' .
+            '}',
+            esc_html( $opt['text_color'] ),
+            esc_html( $opt['bg_color'] ),
+            (int) $opt['border_size'],
+            esc_html( $opt['border_color'] ),
+            (int) $opt['radius']
+        );
+        wp_add_inline_style( 'mhfgfwc-frontend', $css );
+
+
+
 
         // --- Shared Classic JS (safe everywhere) ---
         $fe_path = MHFGFWC_PLUGIN_DIR . 'assets/js/frontend.js';

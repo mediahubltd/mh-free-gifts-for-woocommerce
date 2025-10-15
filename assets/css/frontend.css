@@ -1,240 +1,145 @@
 /* Frontend Styles for MH Free Gifts for WooCommerce */
 
-.mhfgfwc-gift-header {
-    font-size: 15px;
-    font-weight: bold;
-    margin-bottom: 10px;
-    padding: 10px;
-    background: #f5f5f5;
-    text-transform: uppercase;
-    text-align: center;
-    text-shadow: none;
-    border-radius: 4px;
+/* ----------------------------------------
+   General containers
+---------------------------------------- */
+.mhfgfwc-gift-header{
+  font-size:15px;font-weight:700;margin-bottom:10px;padding:10px;
+  background:#f5f5f5;text-transform:uppercase;text-align:center;border-radius:4px
+}
+.mhfgfwc-gift-selector{
+  margin:20px 0;padding:10px;background:#f5f5f5;border-radius:4px
 }
 
-/* Gift Selector Container */
-.mhfgfwc-gift-selector {
-  margin: 20px 0;
-  padding: 10px;
-  background: #f5f5f5;
-  border-radius: 4px;
+/* Responsive grid (cart/admin) */
+.mhfgfwc-gift-selector .mhfgfwc-grid{
+  display:grid!important;
+  grid-template-columns:repeat(var(--mhfgfwc-items-per-row,4),1fr)!important;
+  gap:15px!important
+}
+.mhfgfwc-rule-group.mhfgfwc-cols-2 .mhfgfwc-grid{grid-template-columns:repeat(2,1fr)}
+.mhfgfwc-rule-group.mhfgfwc-cols-3 .mhfgfwc-grid{grid-template-columns:repeat(3,1fr)}
+.mhfgfwc-rule-group.mhfgfwc-cols-4 .mhfgfwc-grid{grid-template-columns:repeat(4,1fr)}
+.mhfgfwc-rule-group.mhfgfwc-cols-5 .mhfgfwc-grid{grid-template-columns:repeat(5,1fr)}
+.mhfgfwc-rule-group.mhfgfwc-cols-6 .mhfgfwc-grid{grid-template-columns:repeat(6,1fr)}
+
+/* Gift item card */
+.mhfgfwc-gift-item{
+  background:#fff;border-radius:4px;padding:10px;text-align:center
+}
+.mhfgfwc-gift-item .mhfgfwc-thumb img{
+  max-width:100%;height:auto;margin-bottom:10px;border-radius:4px
+}
+.mhfgfwc-gift-item .mhfgfwc-title{font-weight:700;margin-bottom:10px}
+
+/* ----------------------------------------
+   Buttons (normalized height + flex centering)
+   Change these CSS variables later if you want outline styling.
+---------------------------------------- */
+:root{
+  /*--mhfgfwc-accent: var(--accent-color, #fff);
+  --mhfgfwc-accent: #fff;
+  --mhfgfwc-text:   #000;
+  --mhfgfwc-fill:   var(--mhfgfwc-accent);*/ /* set to #fff for outline style */
 }
 
-/* Responsive Grid Layout (Cart & Admin) */
-.mhfgfwc-gift-selector .mhfgfwc-grid {
-  display: grid !important;
-  grid-template-columns: repeat(var(--mhfgfwc-items-per-row, 4), 1fr) !important;
-  gap: 15px !important;
-}
-
-/* Gift Item Card */
-.mhfgfwc-gift-item {
-  background: #fff;
-  /*border: 1px solid #ddd;*/
-  border-radius: 4px;
-  padding: 10px;
-  text-align: center;
-}
-.mhfgfwc-gift-item .mhfgfwc-thumb img {
-  max-width: 100%;
-  height: auto;
-  margin-bottom: 10px;
-  border-radius: 4px;    
-}
-.mhfgfwc-gift-item .mhfgfwc-title {
-  font-weight: bold;
-  margin-bottom: 10px;
-}
+.mhfgfwc-btn,
 .mhfgfwc-gift-item .mhfgfwc-add-gift,
-.mhfgfwc-gift-item .mhfgfwc-remove-gift {
-  display: inline-block;
-  outline: none;
-  font-weight: bold;
-  font-size: 15px;
-  line-height: 16px;
-  text-align: center;
-  letter-spacing: 0.01em;
-  padding: 8px 16px;
-  color: #fff;
-  border: solid 2px var(--accent-color, #0071a1);
-  background-color: var(--accent-color, #0071a1);
-  text-decoration: none !important;
-  cursor: pointer;
-  border-radius: 25px;
+.mhfgfwc-gift-item .mhfgfwc-remove-gift{
+  box-sizing:border-box;
+  height:34px;    
+  white-space:nowrap;
+
+  display:inline-block;outline:0;font-weight:700;font-size:15px;line-height:16px;
+  text-align:center;letter-spacing:.01em;padding:8px 16px;
+  color:var(--mhfgfwc-btn-text,#fff);
+  border:var(--mhfgfwc-btn-border-size,2px) solid var(--mhfgfwc-btn-border,var(--accent-color,#0071a1));
+  background:var(--mhfgfwc-btn-bg, var(--accent-color,#0071a1));
+  text-decoration:none!important;cursor:pointer;
+  border-radius:var(--mhfgfwc-btn-radius,25px)
+
 }
+
 .mhfgfwc-gift-item .mhfgfwc-add-gift:disabled,
-.mhfgfwc-gift-item .mhfgfwc-remove-gift:disabled {
-  background: #ccc;
-  cursor: not-allowed;
+.mhfgfwc-gift-item .mhfgfwc-remove-gift:disabled{
+  background:#ccc;border-color:#ccc;color:#fff;cursor:not-allowed
 }
 
-/* Disabled rule styling */
-.mhfgfwc-disabled-rule {
-  opacity: 0.5;
-}
-.mhfgfwc-disabled-rule .mhfgfwc-add-gift {
-  pointer-events: none;
-}
-.mhfgfwc-disabled-rule .mhfgfwc-remove-gift {
-  /* always allow removal even when disabled */
-  pointer-events: auto;
-}
+/* Disabled rule: keep remove clickable */
+.mhfgfwc-disabled-rule{opacity:.5}
+.mhfgfwc-disabled-rule .mhfgfwc-add-gift{pointer-events:none}
 
-/* Checkout Inline Layout Overrides */
-/* Display gifts line-by-line with small thumbnails */
-.woocommerce .mhfgfwc-gift-section .mhfgfwc-grid {
-  display: block !important;
+/* ----------------------------------------
+   Classic checkout inline layout (minimal overrides)
+---------------------------------------- */
+.woocommerce .mhfgfwc-gift-section .mhfgfwc-grid{display:block!important}
+.woocommerce .mhfgfwc-gift-section .mhfgfwc-gift-item{
+  display:grid;grid-template-columns:30% 70%;grid-auto-rows:auto;
+  grid-template-areas:"thumb title" "thumb button";
+  gap:5px 10px;margin-bottom:12px;text-align:left
 }
-.woocommerce .mhfgfwc-gift-section .mhfgfwc-gift-item {
-  display: grid;
-  grid-template-columns: 30% 70%;
-  grid-auto-rows: auto;
-  grid-template-areas:
-    "thumb title"
-    "thumb button";
-  gap: 5px 10px;
-  margin-bottom: 12px;
-  text-align: left;
+.woocommerce .mhfgfwc-gift-section .mhfgfwc-gift-item .mhfgfwc-thumb{grid-area:thumb}
+.woocommerce .mhfgfwc-gift-section .mhfgfwc-gift-item .mhfgfwc-thumb img{
+  width:70px;height:70px;object-fit:cover;margin:0
 }
-.woocommerce .mhfgfwc-gift-section .mhfgfwc-gift-item .mhfgfwc-thumb {
-  grid-area: thumb;
-}
-.woocommerce .mhfgfwc-gift-section .mhfgfwc-gift-item .mhfgfwc-thumb img {
-  width: 70px;
-  height: 70px;
-  object-fit: cover;
-  margin: 0;
-}
-.woocommerce .mhfgfwc-gift-section .mhfgfwc-gift-item .mhfgfwc-title {
-  grid-area: title;
-  font-weight: normal;
-  margin: 0;
-  align-self: center;
+.woocommerce .mhfgfwc-gift-section .mhfgfwc-gift-item .mhfgfwc-title{
+  grid-area:title;font-weight:400;margin:0;align-self:center
 }
 .woocommerce .mhfgfwc-gift-section .mhfgfwc-gift-item .mhfgfwc-add-gift,
-.woocommerce .mhfgfwc-gift-section .mhfgfwc-gift-item .mhfgfwc-remove-gift {
-  grid-area: button;
-  justify-self: end;
-  margin: 0;
-  padding: 4px 8px;
-  font-size: 14px;
-  margin-right: 10px;    
+.woocommerce .mhfgfwc-gift-section .mhfgfwc-gift-item .mhfgfwc-remove-gift{
+  grid-area:button;justify-self:end;margin:0 10px 0 0;
+  height:32px;padding:6px 12px;font-size:13px   /* compact in this layout */
 }
 
-/* Ensure remove-button is always clickable */
-.mhfgfwc-gift-item .mhfgfwc-remove-gift {
-  pointer-events: auto;
-}
+/* ----------------------------------------
+   WooCommerce Blocks integration
+---------------------------------------- */
 
-/* Small screen adjustments */
-@media (max-width: 600px) {
-  .mhfgfwc-gift-selector .mhfgfwc-grid {
-    grid-template-columns: 1fr !important;
-  }
-}
-
-/* Toggle link styling (below coupon) */
-/* Toggle row layout: text left, arrow right */
-.mhfgfwc-show-gifts-toggle {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  text-decoration: none;
-  font-size: 18px;
-  font-weight:500;
-}
-
-/* Optional: make the icon align nicely */
-.mhfgfwc-toggle-icon {
-  line-height: 1;
-  font-size: 16px;
-}
-
-/* Start hidden handled by JS; keep helper if needed elsewhere */
-.mhfgfwc-hidden { display: none; }
-
-/* (If you use column classes from earlier suggestions) */
-.mhfgfwc-rule-group.mhfgfwc-cols-2 .mhfgfwc-grid { grid-template-columns: repeat(2,1fr); }
-.mhfgfwc-rule-group.mhfgfwc-cols-3 .mhfgfwc-grid { grid-template-columns: repeat(3,1fr); }
-.mhfgfwc-rule-group.mhfgfwc-cols-4 .mhfgfwc-grid { grid-template-columns: repeat(4,1fr); }
-.mhfgfwc-rule-group.mhfgfwc-cols-5 .mhfgfwc-grid { grid-template-columns: repeat(5,1fr); }
-.mhfgfwc-rule-group.mhfgfwc-cols-6 .mhfgfwc-grid { grid-template-columns: repeat(6,1fr); }
-
-
-/* Coupon-toggle wrapper adjustments */
-.woocommerce-form-coupon-toggle.mhfgfwc-toggle {
-  padding-bottom: 20px;
-  margin-bottom: 20px;
-  border-bottom: 1px solid #eee;
-}
-
-/* WooCommerce Blocks: hide quantity selector for free gifts (items that render our badge) */
+/* Hide the qty control for gifts (identified by our badge) */
 .wc-block-cart-items .wc-block-cart-item:has(.mhfgfwc-badge) .wc-block-components-quantity-selector,
-.wc-block-checkout__review-order .wc-block-cart-item:has(.mhfgfwc-badge) .wc-block-components-quantity-selector {
-  display: none !important;
+.wc-block-checkout__review-order .wc-block-cart-item:has(.mhfgfwc-badge) .wc-block-components-quantity-selector{
+  display:none!important
+}
+/* Compact "× 1" label (used by our JS) */
+.mhfgfwc-fixed-qty{
+  display:inline-block;font-size:.9em;opacity:.75;margin-left:.35rem
 }
 
-/* Optional: show a small “Qty 1” label so the layout doesn’t jump */
-.wc-block-cart-items .wc-block-cart-item:has(.mhfgfwc-badge) .mhfgfwc-fixed-qty,
-.wc-block-checkout__review-order .wc-block-cart-item:has(.mhfgfwc-badge) .mhfgfwc-fixed-qty {
-  display: inline-block;
-  font-size: .9em;
-  opacity: .75;
-  margin-left: .25rem;
-}
-/* Blocks: visual polish for fixed-qty gifts */
-.wc-block-cart-item.is-mhfgfwc-gift .mhfgfwc-fixed-qty {
-  display: inline-block;
-  margin-left: .35rem;
-  font-size: .9em;
-  opacity: .75;
-}
-/* Blocks: visual polish for fixed-qty gifts */
-.wc-block-cart-items__row.is-mhfgfwc-gift .mhfgfwc-fixed-qty {
-  display: inline-block;
-  margin-right: .5rem;
-  font-size: .9em;
-  opacity: .75;
-}
-.mhfgfwc-blocks-panel { width: 100%; display:block; }
-/* Checkout-only layout (slot gets .mhfgfwc--checkout on checkout) */
-.mhfgfwc--checkout .mhfgfwc-grid {
-  display: grid;
-  grid-template-columns: 1fr;   /* stack items */
-  row-gap: 12px;
-}
+/* Mount container from blocks.js */
+.mhfgfwc-blocks-panel{width:100%;display:block}
 
-/* Make each gift row look like the summary rows */
-.mhfgfwc--checkout .mhfgfwc-gift-item {
-  display: grid;
-  grid-template-columns: 64px 1fr auto; /* thumb | title | action */
-  align-items: center;
-  column-gap: 12px;
-  padding: 8px 0;
-  border-bottom: 1px solid var(--wc-blocks-border, rgba(0,0,0,.06));
+/* Checkout-only slot (Blocks) */
+.mhfgfwc--checkout .mhfgfwc-grid{
+  display:grid;grid-template-columns:1fr;row-gap:12px
 }
-
-.mhfgfwc--checkout .mhfgfwc-gift-item:last-child {
-  border-bottom: 0;
+.mhfgfwc--checkout .mhfgfwc-gift-item{
+  display:grid;grid-template-columns:64px 1fr auto;align-items:center;
+  column-gap:12px;padding:8px 0;border-bottom:1px solid var(--wc-blocks-border,rgba(0,0,0,.06))
 }
-
-.mhfgfwc--checkout .mhfgfwc-thumb img {
-  width: 64px;
-  height: 64px;
-  object-fit: cover;
-  display: block;
+.mhfgfwc--checkout .mhfgfwc-gift-item:last-child{border-bottom:0}
+.mhfgfwc--checkout .mhfgfwc-thumb img{
+  width:64px;height:64px;object-fit:cover;display:block
 }
-
-.mhfgfwc--checkout .mhfgfwc-title {
-  font-weight: 600;
-  line-height: 1.35;
-}
-
+.mhfgfwc--checkout .mhfgfwc-title{font-weight:600;line-height:1.35}
 .mhfgfwc--checkout .mhfgfwc-add-gift,
-.mhfgfwc--checkout .mhfgfwc-remove-gift {
-  white-space: nowrap;
-  margin-left: 12px;
+.mhfgfwc--checkout .mhfgfwc-remove-gift{
+  white-space:nowrap;margin-left:12px;height:32px;padding:0 12px;font-size:13px
 }
-.mhfgfwc-is-gift .wc-block-components-quantity-selector__button { pointer-events: none; opacity: .5; }
-.mhfgfwc-qty-locked { pointer-events: none; }
 
+/* ----------------------------------------
+   Misc
+---------------------------------------- */
+.mhfgfwc-show-gifts-toggle{
+  display:flex;justify-content:space-between;align-items:center;
+  text-decoration:none;font-size:18px;font-weight:500
+}
+.mhfgfwc-toggle-icon{line-height:1;font-size:16px}
+.mhfgfwc-hidden{display:none}
+.woocommerce-form-coupon-toggle.mhfgfwc-toggle{
+  padding-bottom:20px;margin-bottom:20px;border-bottom:1px solid #eee
+}
+
+/* Small screens */
+@media (max-width:600px){
+  .mhfgfwc-gift-selector .mhfgfwc-grid{grid-template-columns:1fr!important}
+}
