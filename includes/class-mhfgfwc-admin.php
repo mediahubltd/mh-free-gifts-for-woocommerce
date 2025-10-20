@@ -39,6 +39,8 @@ class MHFGFWC_Admin {
         add_action( 'wp_ajax_mhfgfwc_search_products', [ $this, 'ajax_search_products' ] );
         add_action( 'wp_ajax_mhfgfwc_toggle_status',   [ $this, 'ajax_toggle_status' ] );
         add_action( 'wp_ajax_mhfgfwc_search_users',    [ $this, 'ajax_search_users' ] );
+        add_action( 'wp_ajax_mhfgfwc_search_categories', [ $this, 'ajax_search_categories' ] );
+
     }
 
     public function register_menu() {
@@ -349,6 +351,9 @@ class MHFGFWC_Admin {
         $gifts     = $rule ? maybe_unserialize( $rule->gifts ) : [];
         $prod_deps = $rule ? maybe_unserialize( $rule->product_dependency ) : [];
         $user_deps = $rule ? maybe_unserialize( $rule->user_dependency ) : [];
+        $cat_deps = $rule ? maybe_unserialize( $rule->category_dependency ) : [];
+        $cat_deps = is_array( $cat_deps ) ? array_map( 'intval', $cat_deps ) : [];
+        
         // phpcs:enable WordPress.Security.NonceVerification.Recommended
         ?>
         <div class="wrap">
@@ -419,6 +424,36 @@ class MHFGFWC_Admin {
                                 <?php endif; endforeach; ?>
                             </select>
                         </td>
+                    </tr>
+                    <tr>
+                      <th><?php esc_html_e( 'Product Category Dependency', 'mh-free-gifts-for-woocommerce' ); ?></th>
+                      <td>
+                        <select name="category_dependency[]" class="mhfgfwc-category-select" multiple="multiple"
+                                data-placeholder="<?php esc_attr_e( 'Search categories...', 'mh-free-gifts-for-woocommerce' ); ?>"
+                                style="width:100%;">
+                            <?php
+                            if ( $cat_deps ) {
+                                $pre = get_terms( [
+                                    'taxonomy'   => 'product_cat',
+                                    'hide_empty' => false,
+                                    'include'    => $cat_deps,
+                                ] );
+                                if ( ! is_wp_error( $pre ) ) {
+                                    foreach ( $pre as $t ) {
+                                        printf(
+                                            '<option value="%d" selected>%s</option>',
+                                            (int) $t->term_id,
+                                            esc_html( $t->name )
+                                        );
+                                    }
+                                }
+                            }
+                            ?>
+                        </select>
+                        <p class="description">
+                            <?php esc_html_e( 'Customer must have at least one product from any selected category in the cart.', 'mh-free-gifts-for-woocommerce' ); ?>
+                        </p>
+                      </td>
                     </tr>
                     <tr>
                         <th><?php esc_html_e( 'User Dependency', 'mh-free-gifts-for-woocommerce' ); ?></th>
@@ -589,6 +624,7 @@ class MHFGFWC_Admin {
 
         $product_dependency = isset( $post['product_dependency'] ) ? array_map( 'intval', (array) $post['product_dependency'] ) : [];
         $user_dependency    = isset( $post['user_dependency'] )    ? array_map( 'intval', (array) $post['user_dependency'] )    : [];
+        $category_dependency = isset( $post['category_dependency'] ) ? array_map( 'intval', (array) $post['category_dependency'] ) : [];
 
         $disable_with_coupon = ! empty( $post['disable_with_coupon'] ) ? 1 : 0;
 
@@ -619,6 +655,7 @@ class MHFGFWC_Admin {
             'gift_quantity'       => $gift_quantity,
             'product_dependency'  => maybe_serialize( $product_dependency ),
             'user_dependency'     => maybe_serialize( $user_dependency ),
+            'category_dependency' => maybe_serialize( $category_dependency ),
             'disable_with_coupon' => $disable_with_coupon,
             'subtotal_operator'   => $subtotal_operator,
             'subtotal_amount'     => $subtotal_amount,
@@ -811,6 +848,43 @@ class MHFGFWC_Admin {
 
         wp_send_json_success( $results );
     }
+    
+    public function ajax_search_categories() {
+        if ( ! current_user_can( 'manage_options' ) ) {
+            wp_send_json_error( [ 'message' => esc_html__( 'Insufficient permissions.', 'mh-free-gifts-for-woocommerce' ) ], 403 );
+        }
+        if (
+            empty( $_REQUEST['nonce'] ) ||
+            ! wp_verify_nonce( sanitize_text_field( wp_unslash( $_REQUEST['nonce'] ) ), 'mhfgfwc_admin_nonce' )
+        ) {
+            wp_send_json_error( [ 'message' => esc_html__( 'Invalid nonce', 'mh-free-gifts-for-woocommerce' ) ], 400 );
+        }
+
+        $term = isset( $_REQUEST['q'] ) ? sanitize_text_field( wp_unslash( $_REQUEST['q'] ) ) : '';
+
+        $terms = get_terms( [
+            'taxonomy'   => 'product_cat',
+            'hide_empty' => false,
+            'number'     => 20,
+            'search'     => $term,
+        ] );
+
+        $results = [];
+        if ( ! is_wp_error( $terms ) ) {
+            foreach ( $terms as $t ) {
+                // Decode any stored entities so SelectWoo shows "A & B" (not "A &amp; B").
+                $label = wp_specialchars_decode( $t->name, ENT_QUOTES );
+                $results[] = [
+                    'id'   => (int) $t->term_id,
+                    'text' => $label,
+                ];
+            }
+        }
+
+        wp_send_json_success( $results );
+    }
+
+
     
     public function register_settings() {
         register_setting(

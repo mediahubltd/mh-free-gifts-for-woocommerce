@@ -5,8 +5,8 @@ Description: Let customers choose a free gift when cart criteria are met (thresh
 Tags: free gifts for woocommerce, buy one get one, free gift, Gift Product Woocommerce, WooCommerce gift
 Requires at least: 6.0
 Tested up to: 6.8
-Stable tag: 1.0.7
-Version: 1.0.7
+Stable tag: 1.0.8
+Version: 1.0.8
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 Donate link: https://ko-fi.com/adk77
@@ -92,6 +92,9 @@ Yes! There’s no premium version or upsells. Everything is included for free.
 Support is provided via the WordPress.org forums or through the Mediahub support site.
 
 == Changelog ==
+
+= 1.0.8 (2025-10-17) =
+* [Added] Category dependancy functionality
 
 = 1.0.7 (2025-10-16) =
 * [Added] Color picker added to color fields

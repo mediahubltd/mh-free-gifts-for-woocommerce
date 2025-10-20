@@ -12,7 +12,7 @@ class MHFGFWC_Install {
     /**
      * Increment when you change SQL schemas.
      */
-    const SCHEMA_VERSION = '1.0.0';
+    const SCHEMA_VERSION = '1.0.1';
 
     /**
      * Uniform, prefixed option key for schema version.
@@ -71,6 +71,7 @@ class MHFGFWC_Install {
             gift_quantity INT(10) UNSIGNED NOT NULL DEFAULT 1,
             product_dependency LONGTEXT NULL,
             user_dependency LONGTEXT NULL,
+            category_dependency LONGTEXT NULL,
             disable_with_coupon TINYINT(1) NOT NULL DEFAULT 0,
             subtotal_operator VARCHAR(4) NULL,
             subtotal_amount DECIMAL(10,2) NULL,

@@ -222,6 +222,26 @@ final class MHFGFWC_Engine {
 					continue;
 				}
 			}
+            
+            /**
+             * Category dependency (product_cat terms).
+             * Accepts serialized array stored in DB column:
+             *   - 'category_dependency' (preferred), OR
+             *   - 'product_category_dependency' (fallback if you used that name)
+             */
+            $cat_deps_raw = $rule['category_dependency'] ?? ( $rule['product_category_dependency'] ?? array() );
+
+            $cat_deps = array_map(
+                'intval',
+                array_filter( (array) maybe_unserialize( $cat_deps_raw ), 'is_numeric' )
+            );
+
+            if ( $cat_deps ) {
+                if ( ! $this->cart_has_required_categories( $cat_deps ) ) {
+                    do_action( 'mhfgfwc_rule_is_eligible', $rule_id, false, 'category_dependency' );
+                    continue;
+                }
+            }
 
 			// User dependency.
 			$users = array_filter( (array) maybe_unserialize( $rule['user_dependency'] ?? array() ), 'is_numeric' );
@@ -413,6 +433,38 @@ final class MHFGFWC_Engine {
 		}
 		return 0;
 	}
+    
+    protected function cart_has_required_categories( array $required_term_ids ) {
+        if ( empty( $required_term_ids ) ) {
+            return true; // no dependency set
+        }
+
+        if ( ! function_exists( 'WC' ) || ! WC()->cart ) {
+            return false;
+        }
+
+        $required = array_map( 'intval', $required_term_ids );
+
+        foreach ( WC()->cart->get_cart() as $item ) {
+            $pid = isset( $item['product_id'] ) ? (int) $item['product_id'] : 0;
+            if ( ! $pid ) {
+                continue;
+            }
+            $product = wc_get_product( $pid );
+            if ( ! $product ) {
+                continue;
+            }
+
+            // WooCommerce stores categories on the parent for variations;
+            // get_category_ids() handles that appropriately.
+            $cats = (array) $product->get_category_ids(); // array<int>
+            if ( array_intersect( $required, $cats ) ) {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
 	/**
 	 * Clear session payload after checkout / when cart empties.
