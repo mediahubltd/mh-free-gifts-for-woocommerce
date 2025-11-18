@@ -67,6 +67,12 @@ final class MHFGFWC_Engine {
 		// Clear when done.
 		add_action( 'woocommerce_cart_emptied', array( $this, 'clear_session' ) );
 		add_action( 'woocommerce_thankyou', array( $this, 'clear_session' ) );
+        
+        add_action( 'woocommerce_before_calculate_totals', array( $this, 'evaluate_cart' ), 1 );
+        add_action( 'woocommerce_add_to_cart', array( $this, 'evaluate_cart' ), 20 );
+        add_action( 'woocommerce_cart_item_removed', array( $this, 'evaluate_cart' ), 20 );
+
+
 	}
 
 	/**

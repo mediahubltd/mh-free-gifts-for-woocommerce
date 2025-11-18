@@ -143,3 +143,10 @@
 @media (max-width:600px){
   .mhfgfwc-gift-selector .mhfgfwc-grid{grid-template-columns:1fr!important}
 }
+
+.mhfgfwc-add-gift.is-loading,
+.mhfgfwc-remove-gift.is-loading {
+  opacity: 0.6;
+  pointer-events: none;
+}
+

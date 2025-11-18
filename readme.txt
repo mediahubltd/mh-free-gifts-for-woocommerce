@@ -5,8 +5,8 @@ Description: Let customers choose a free gift when cart criteria are met (thresh
 Tags: free gifts for woocommerce, buy one get one, free gift, Gift Product Woocommerce, WooCommerce gift
 Requires at least: 6.0
 Tested up to: 6.8
-Stable tag: 1.0.8
-Version: 1.0.8
+Stable tag: 1.0.9
+Version: 1.0.9
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 Donate link: https://ko-fi.com/adk77
@@ -19,11 +19,12 @@ Offer free gifts automatically in WooCommerce! Set up smart rules based on cart 
 
 ### ✨ Key Features
 
+* 💯 **COMPLETELY FREE** — no upsells or pro version. 100% functional out of the box.
 * 🎁 **Add Multiple Free Gift Rules** — create unlimited gift rules with different conditions and products.
 * ⚙️ **Smart Rule Conditions & Limits** — restrict by subtotal, quantity, date range, product, or user.
 * 🧩 **WooCommerce Blocks Support** — compatible with both classic and block-based cart and checkout.
 * 🚀 **Lightweight & Optimized** — uses a dedicated database table for speed and reliability.
-* 💯 **Completely Free** — no upsells or pro version. 100% functional out of the box.
+
 
 ### 🛒 How It Works
 
@@ -92,6 +93,10 @@ Yes! There’s no premium version or upsells. Everything is included for free.
 Support is provided via the WordPress.org forums or through the Mediahub support site.
 
 == Changelog ==
+
+= 1.0.9 (2025-11-13) =
+* [Fixed] Gift wasn't being removed from cart when threshold was no longer met
+* [Fixed] State change fix on checkout page
 
 = 1.0.8 (2025-10-17) =
 * [Added] Category dependancy functionality

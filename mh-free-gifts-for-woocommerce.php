@@ -3,7 +3,7 @@
  * Plugin Name: MH Free Gifts for WooCommerce 
  * Plugin URI:  https://github.com/mediahubltd/mh-free-gifts-for-woocommerce
  * Description: Mediahub Free Gifts for WooCommerce gives store owners a powerful yet intuitive way to reward customers with a choice of complimentary products.
- * Version:     1.0.8
+ * Version:     1.0.9
  * Author:      mediahub
  * Author URI:  https://www.mediahubsolutions.com
  * Text Domain: mh-free-gifts-for-woocommerce
@@ -104,3 +104,14 @@ add_action( 'plugins_loaded', function() {
     if ( class_exists( 'MHFGFWC_Engine' ) )   { MHFGFWC_Engine::instance(); }
     if ( class_exists( 'MHFGFWC_Frontend' ) ) { MHFGFWC_Frontend::instance(); }
 }, 20 );
+
+add_action( 'wp_ajax_mhfgfwc_get_gift_section', 'mhfgfwc_get_gift_section' );
+add_action( 'wp_ajax_nopriv_mhfgfwc_get_gift_section', 'mhfgfwc_get_gift_section' );
+
+function mhfgfwc_get_gift_section() {
+    ob_start();
+    do_action( 'mhfgfwc_render_gifts_section' );
+    $html = ob_get_clean();
+    wp_send_json_success( [ 'html' => $html ] );
+}
+

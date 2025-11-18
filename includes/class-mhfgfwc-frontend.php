@@ -48,125 +48,175 @@ final class MHFGFWC_Frontend {
 		add_action( 'wc_ajax_nopriv_mhfgfwc_add_gift', array( $this, 'ajax_add_gift' ) );
 		add_action( 'wc_ajax_mhfgfwc_remove_gift', array( $this, 'ajax_remove_gift' ) );
 		add_action( 'wc_ajax_nopriv_mhfgfwc_remove_gift', array( $this, 'ajax_remove_gift' ) );
-        // AJAX (Blocks render)
-        add_action( 'wp_ajax_mhfgfwc_render_gifts',      [ $this, 'ajax_render_gifts' ] );
-        add_action( 'wp_ajax_nopriv_mhfgfwc_render_gifts', [ $this, 'ajax_render_gifts' ] );
+
+		// AJAX (Blocks render)
+		add_action( 'wp_ajax_mhfgfwc_render_gifts',      [ $this, 'ajax_render_gifts' ] );
+		add_action( 'wp_ajax_nopriv_mhfgfwc_render_gifts', [ $this, 'ajax_render_gifts' ] );
+
+		// 🔹 New: provide inner renderer for refresh endpoint
+		add_action( 'mhfgfwc_render_gifts_section_inner', [ $this, 'render_gifts_section_inner' ] );
+        
+		// Auto-prune ineligible gifts whenever the engine updates eligibility.
+		add_action( 'mhfgfwc_after_evaluate_cart', array( $this, 'prune_ineligible_gifts' ), 10, 2 );
+
+		// After each re-evaluation, tell WooCommerce JS to refresh fragments
+		add_action( 'mhfgfwc_after_evaluate_cart', [ $this, 'inject_refresh_js' ], 20 );
+
+		add_action( 'woocommerce_after_calculate_totals', function() {
+			if ( is_checkout() ) {
+				add_action( 'wp_footer', function() {
+					?>
+					<script>
+					jQuery(function($){
+						$(document.body).trigger('update_checkout');
+					});
+					</script>
+					<?php
+				}, 99 );
+			}
+		}, 50 );
+
+		// AJAX endpoint to re-render the gift grid
+		add_action( 'wp_ajax_mhfgfwc_refresh_gifts', 'mhfgfwc_refresh_gifts' );
+		add_action( 'wp_ajax_nopriv_mhfgfwc_refresh_gifts', 'mhfgfwc_refresh_gifts' );
+
+		// NOTE: this defines a global callback; our new render_gifts_section_inner()
+		// is wired above via the mhfgfwc_render_gifts_section_inner hook.
+		function mhfgfwc_refresh_gifts() {
+			ob_start();
+			do_action( 'mhfgfwc_render_gifts_section_inner' ); // IMPORTANT: inner grid only
+			$html = ob_get_clean();
+			wp_send_json_success( [ 'html' => $html ] );
+		}
+
+	}
+    
+
+	/**
+	 * Enqueue CSS/JS for both classic and block-based cart/checkout.
+	 */
+	public function enqueue_assets() {
+		// --- Shared CSS ---
+		$css_path = MHFGFWC_PLUGIN_DIR . 'assets/css/frontend.css';
+		wp_enqueue_style(
+			'mhfgfwc-frontend',
+			MHFGFWC_PLUGIN_URL . 'assets/css/frontend.css',
+			[ 'dashicons' ],
+			file_exists( $css_path ) ? filemtime( $css_path ) : MHFGFWC_VERSION
+		);
+		
+		// Dynamic button CSS from settings
+		$opt = get_option( 'mhfgfwc_button_styles', [] );
+		$opt = wp_parse_args( is_array( $opt ) ? $opt : [], [
+			'text_color'   => '#ffffff',
+			'bg_color'     => '#000000',
+			'border_color' => '#000000',
+			'border_size'  => 2,
+			'radius'       => 25,
+		] );
+
+		$css = sprintf(
+			'.mhfgfwc-btn, .mhfgfwc-gift-item .mhfgfwc-add-gift, .mhfgfwc-gift-item .mhfgfwc-remove-gift{' .
+				'color:%1$s;background:%2$s;border:%3$dpx solid %4$s;border-radius:%5$dpx;' .
+			'}' .
+			'.mhfgfwc-gift-item .mhfgfwc-add-gift:disabled, .mhfgfwc-gift-item .mhfgfwc-remove-gift:disabled{' .
+				'background:#ccc;border-color:#ccc;color:#666;' .
+			'}',
+			esc_html( $opt['text_color'] ),
+			esc_html( $opt['bg_color'] ),
+			(int) $opt['border_size'],
+			esc_html( $opt['border_color'] ),
+			(int) $opt['radius']
+		);
+		wp_add_inline_style( 'mhfgfwc-frontend', $css );
+
+
+		// --- Shared Classic JS (safe everywhere) ---
+		$fe_path = MHFGFWC_PLUGIN_DIR . 'assets/js/frontend.js';
+		wp_enqueue_script(
+			'mhfgfwc-frontend',
+			MHFGFWC_PLUGIN_URL . 'assets/js/frontend.js',
+			[ 'jquery' ],
+			file_exists( $fe_path ) ? filemtime( $fe_path ) : MHFGFWC_VERSION,
+			true
+		);
+
+		wp_localize_script( 'mhfgfwc-frontend', 'mhfgfwcFrontend', [
+			// Keep WooCommerce’s proper AJAX endpoints for add/remove
+			'ajax_url_add'    => WC_AJAX::get_endpoint( 'mhfgfwc_add_gift' ),
+			'ajax_url_remove' => WC_AJAX::get_endpoint( 'mhfgfwc_remove_gift' ),
+
+			// Add refresh endpoint for gift section reload
+			'ajax_url_refresh'       => admin_url( 'admin-ajax.php?action=mhfgfwc_refresh_gifts' ),
+			'ajax_url_refresh_gifts' => admin_url( 'admin-ajax.php?action=mhfgfwc_get_gift_section' ),
+			
+			// Generic admin-ajax fallback (for older hooks or other AJAX needs)
+			'ajaxurl' => admin_url( 'admin-ajax.php' ),
+
+			// Security
+			'nonce' => wp_create_nonce( 'mhfgfwc_frontend_nonce' ),
+
+			// Translations
+			'i18n' => [
+				'toggle'     => __( 'Free Gift', 'mh-free-gifts-for-woocommerce' ),
+				'add'        => __( 'Add Gift', 'mh-free-gifts-for-woocommerce' ),
+				'adding'     => __( 'Adding…', 'mh-free-gifts-for-woocommerce' ),
+				'remove'     => __( 'Remove Gift', 'mh-free-gifts-for-woocommerce' ),
+				'removing'   => __( 'Removing…', 'mh-free-gifts-for-woocommerce' ),
+				'added'      => __( 'Added', 'mh-free-gifts-for-woocommerce' ),
+				'ajax_error' => __( 'AJAX error. Please try again.', 'mh-free-gifts-for-woocommerce' ),
+			],
+		] );
+
+
+		// --- Conditionally enqueue Block support (only if block templates present) ---
+		global $post;
+		$is_block_cart     = $post && function_exists( 'has_block' ) && has_block( 'woocommerce/cart', $post );
+		$is_block_checkout = $post && function_exists( 'has_block' ) && has_block( 'woocommerce/checkout', $post );
+
+		$should_enqueue_blocks = ( $is_block_cart || $is_block_checkout || ( ( is_cart() || is_checkout() ) && $theme_supports_blocks ) );
+
+		if ( $should_enqueue_blocks ) {
+			$blocks_path = MHFGFWC_PLUGIN_DIR . 'assets/js/blocks.js';
+			$deps = [];
+
+			// Only register WP dependencies if they actually exist (prevents 500s)
+			if ( wp_script_is( 'wp-element', 'registered' ) ) { $deps[] = 'wp-element'; }
+			if ( wp_script_is( 'wp-data', 'registered' ) ) { $deps[] = 'wp-data'; }
+			if ( empty( $deps ) ) { $deps[] = 'jquery'; } // fallback
+
+			wp_enqueue_script(
+				'mhfgfwc-blocks',
+				MHFGFWC_PLUGIN_URL . 'assets/js/blocks.js',
+				$deps,
+				file_exists( $blocks_path ) ? filemtime( $blocks_path ) : MHFGFWC_VERSION,
+				true
+			);
+
+			wp_localize_script( 'mhfgfwc-blocks', 'mhfgfwcBlocks', [
+				'context'      => $is_block_cart ? 'cart' : 'checkout',
+				'mountId'      => 'mhfgfwc-blocks-slot',
+				'mountTitle'   => __( 'Choose Your Free Gift', 'mh-free-gifts-for-woocommerce' ),
+				'renderUrl'    => admin_url( 'admin-ajax.php?action=mhfgfwc_render_gifts' ),
+				'addUrl'       => WC_AJAX::get_endpoint( 'mhfgfwc_add_gift' ),
+				'removeUrl'    => WC_AJAX::get_endpoint( 'mhfgfwc_remove_gift' ),
+				'i18nFreeGift' => __( 'Free gift', 'mh-free-gifts-for-woocommerce' ),
+				'nonce'        => wp_create_nonce( 'mhfgfwc_frontend_nonce' ),
+			]);
+		}
 	}
 
-    /**
-     * Enqueue CSS/JS for both classic and block-based cart/checkout.
-     */
-    public function enqueue_assets() {
-        // --- Shared CSS ---
-        $css_path = MHFGFWC_PLUGIN_DIR . 'assets/css/frontend.css';
-        wp_enqueue_style(
-            'mhfgfwc-frontend',
-            MHFGFWC_PLUGIN_URL . 'assets/css/frontend.css',
-            [ 'dashicons' ],
-            file_exists( $css_path ) ? filemtime( $css_path ) : MHFGFWC_VERSION
-        );
-        
-        // Dynamic button CSS from settings
-        $opt = get_option( 'mhfgfwc_button_styles', [] );
-        $opt = wp_parse_args( is_array( $opt ) ? $opt : [], [
-            'text_color'   => '#ffffff',
-            'bg_color'     => '#000000',
-            'border_color' => '#000000',
-            'border_size'  => 2,
-            'radius'       => 25,
-        ] );
 
-        $css = sprintf(
-            '.mhfgfwc-btn, .mhfgfwc-gift-item .mhfgfwc-add-gift, .mhfgfwc-gift-item .mhfgfwc-remove-gift{' .
-                'color:%1$s;background:%2$s;border:%3$dpx solid %4$s;border-radius:%5$dpx;' .
-            '}' .
-            '.mhfgfwc-gift-item .mhfgfwc-add-gift:disabled, .mhfgfwc-gift-item .mhfgfwc-remove-gift:disabled{' .
-                'background:#ccc;border-color:#ccc;color:#666;' .
-            '}',
-            esc_html( $opt['text_color'] ),
-            esc_html( $opt['bg_color'] ),
-            (int) $opt['border_size'],
-            esc_html( $opt['border_color'] ),
-            (int) $opt['radius']
-        );
-        wp_add_inline_style( 'mhfgfwc-frontend', $css );
-
-
-        // --- Shared Classic JS (safe everywhere) ---
-        $fe_path = MHFGFWC_PLUGIN_DIR . 'assets/js/frontend.js';
-        wp_enqueue_script(
-            'mhfgfwc-frontend',
-            MHFGFWC_PLUGIN_URL . 'assets/js/frontend.js',
-            [ 'jquery' ],
-            file_exists( $fe_path ) ? filemtime( $fe_path ) : MHFGFWC_VERSION,
-            true
-        );
-
-        wp_localize_script( 'mhfgfwc-frontend', 'mhfgfwcFrontend', [
-            'ajax_url_add'    => WC_AJAX::get_endpoint( 'mhfgfwc_add_gift' ),
-            'ajax_url_remove' => WC_AJAX::get_endpoint( 'mhfgfwc_remove_gift' ),
-            'nonce'           => wp_create_nonce( 'mhfgfwc_frontend_nonce' ),
-            'i18n' => [
-                'toggle'     => __( 'Free Gift', 'mh-free-gifts-for-woocommerce' ),
-                'add'        => __( 'Add Gift', 'mh-free-gifts-for-woocommerce' ),
-                'adding'     => __( 'Adding…', 'mh-free-gifts-for-woocommerce' ),
-                'remove'     => __( 'Remove Gift', 'mh-free-gifts-for-woocommerce' ),
-                'removing'   => __( 'Removing…', 'mh-free-gifts-for-woocommerce' ),
-                'ajax_error' => __( 'AJAX error. Please try again.', 'mh-free-gifts-for-woocommerce' ),
-            ],
-        ] );
-
-        // --- Conditionally enqueue Block support (only if block templates present) ---
-        global $post;
-        $is_block_cart    = $post && function_exists( 'has_block' ) && has_block( 'woocommerce/cart', $post );
-        $is_block_checkout= $post && function_exists( 'has_block' ) && has_block( 'woocommerce/checkout', $post );
-
-        $should_enqueue_blocks = ( $is_block_cart || $is_block_checkout || ( ( is_cart() || is_checkout() ) && $theme_supports_blocks ) );
-
-        if ( $should_enqueue_blocks ) {
-            $blocks_path = MHFGFWC_PLUGIN_DIR . 'assets/js/blocks.js';
-            $deps = [];
-
-            // Only register WP dependencies if they actually exist (prevents 500s)
-            if ( wp_script_is( 'wp-element', 'registered' ) ) { $deps[] = 'wp-element'; }
-            if ( wp_script_is( 'wp-data', 'registered' ) ) { $deps[] = 'wp-data'; }
-            if ( empty( $deps ) ) { $deps[] = 'jquery'; } // fallback
-
-            wp_enqueue_script(
-                'mhfgfwc-blocks',
-                MHFGFWC_PLUGIN_URL . 'assets/js/blocks.js',
-                $deps,
-                file_exists( $blocks_path ) ? filemtime( $blocks_path ) : MHFGFWC_VERSION,
-                true
-            );
-
-            wp_localize_script( 'mhfgfwc-blocks', 'mhfgfwcBlocks', [
-              'context'      => $is_block_cart ? 'cart' : 'checkout',
-              'mountId'      => 'mhfgfwc-blocks-slot',
-              'mountTitle'   => __( 'Choose Your Free Gift', 'mh-free-gifts-for-woocommerce' ),
-              'renderUrl'    => admin_url( 'admin-ajax.php?action=mhfgfwc_render_gifts' ),
-              'addUrl'       => WC_AJAX::get_endpoint( 'mhfgfwc_add_gift' ),
-              'removeUrl'    => WC_AJAX::get_endpoint( 'mhfgfwc_remove_gift' ),
-              'i18nFreeGift' => __( 'Free gift', 'mh-free-gifts-for-woocommerce' ),
-              'nonce'        => wp_create_nonce( 'mhfgfwc_frontend_nonce' ),
-            ]);
-
-
-
-        }
-    }
-
-
-    /**
-     * Disable quantity field for free gifts in the cart.
-     */
-    public function filter_gift_quantity_field( $product_quantity, $cart_item_key, $cart_item ) {
-        if ( ! empty( $cart_item['mhfgfwc_gift'] ) ) {
-            // Replace with static label instead of input field.
-            $product_quantity = '<span class="mhfgfwc-qty-disabled">1</span>';
-        }
-        return $product_quantity;
-    }
+	/**
+	 * Disable quantity field for free gifts in the cart.
+	 */
+	public function filter_gift_quantity_field( $product_quantity, $cart_item_key, $cart_item ) {
+		if ( ! empty( $cart_item['mhfgfwc_gift'] ) ) {
+			// Replace with static label instead of input field.
+			$product_quantity = '<span class="mhfgfwc-qty-disabled">1</span>';
+		}
+		return $product_quantity;
+	}
 
 
 
@@ -211,10 +261,13 @@ final class MHFGFWC_Frontend {
 	}
 
 	/**
-	 * Render “Choose Your Free Gift” as a coupon-style toggle on checkout
-	 * (Uses session-provided map. If missing, we simply don’t show the UI.)
+	 * 🔹 NEW: shared inner renderer for rule groups & gift items
+	 * This is used by:
+	 * - display_checkout_toggle()
+	 * - display_cart_gifts()
+	 * - mhfgfwc_refresh_gifts AJAX (via mhfgfwc_render_gifts_section_inner)
 	 */
-	public function display_checkout_toggle() {
+	public function render_gifts_section_inner() {
 		$session_key = apply_filters( 'mhfgfwc_session_key', 'mhfgfwc_available_gifts' );
 		$available   = WC()->session->get( $session_key, array() );
 		if ( empty( $available ) || ! is_array( $available ) ) {
@@ -223,21 +276,10 @@ final class MHFGFWC_Frontend {
 
 		$gift_cart = $this->map_gifts_in_cart();
 
-		$counts = array();
-		foreach ( $gift_cart as $rid => $products ) {
-			$counts[ $rid ] = count( $products );
-		}
-
-		echo '<div class="woocommerce-form-coupon-toggle mhfgfwc-toggle">';
-		echo '<a href="#" class="mhfgfwc-show-gifts-toggle">' . esc_html__( 'Free Gift', 'mh-free-gifts-for-woocommerce' ) . '</a>';
-		echo '</div>';
-
-		echo '<div class="mhfgfwc-gift-section mhfgfwc-hidden">';
-
 		foreach ( $available as $rule_id => $data ) {
 			$rule_id     = (int) $rule_id;
 			$max_allowed = isset( $data['allowed'] ) ? (int) $data['allowed'] : 0;
-			$have        = isset( $counts[ $rule_id ] ) ? (int) $counts[ $rule_id ] : 0;
+			$have        = isset( $gift_cart[ $rule_id ] ) ? count( $gift_cart[ $rule_id ] ) : 0;
 			$disabled    = ( $max_allowed > 0 && $have >= $max_allowed );
 			$rule_class  = $disabled ? ' mhfgfwc-disabled-rule' : '';
 
@@ -274,6 +316,27 @@ final class MHFGFWC_Frontend {
 
 			echo '</div></div>'; // .mhfgfwc-grid, .mhfgfwc-rule-group
 		}
+	}
+
+	/**
+	 * Render “Choose Your Free Gift” as a coupon-style toggle on checkout
+	 * (Uses session-provided map. If missing, we simply don’t show the UI.)
+	 */
+	public function display_checkout_toggle() {
+		$session_key = apply_filters( 'mhfgfwc_session_key', 'mhfgfwc_available_gifts' );
+		$available   = WC()->session->get( $session_key, array() );
+		if ( empty( $available ) || ! is_array( $available ) ) {
+			return;
+		}
+
+		echo '<div class="woocommerce-form-coupon-toggle mhfgfwc-toggle">';
+		echo '<a href="#" class="mhfgfwc-show-gifts-toggle">' . esc_html__( 'Free Gift', 'mh-free-gifts-for-woocommerce' ) . '</a>';
+		echo '</div>';
+
+		echo '<div class="mhfgfwc-gift-section mhfgfwc-hidden">';
+
+		// 🔹 Use shared inner renderer
+		$this->render_gifts_section_inner();
 
 		echo '</div>'; // .mhfgfwc-gift-section
 	}
@@ -282,160 +345,225 @@ final class MHFGFWC_Frontend {
 	 * Render the gift selector grid on cart & checkout (cart area)
 	 */
 	public function display_cart_gifts() {
-        $session_key = apply_filters( 'mhfgfwc_session_key', 'mhfgfwc_available_gifts' );
+		$session_key = apply_filters( 'mhfgfwc_session_key', 'mhfgfwc_available_gifts' );
 		$available   = WC()->session->get( $session_key, array() );
 		if ( ! is_array( $available ) || empty( $available ) ) {
 			return;
 		}
 
-		$gift_cart = $this->map_gifts_in_cart();
-
 		echo '<div class="mhfgfwc-gift-header">' . esc_html__( 'Choose Your Free Gift', 'mh-free-gifts-for-woocommerce' ) . '</div>';
 		echo '<div class="mhfgfwc-gift-selector">';
 
-		foreach ( $available as $rule_id => $data ) {
-			$rule_id     = (int) $rule_id;
-			$max_allowed = isset( $data['allowed'] ) ? (int) $data['allowed'] : 0;
-			$have        = isset( $gift_cart[ $rule_id ] ) ? count( $gift_cart[ $rule_id ] ) : 0;
-			$disabled    = ( $max_allowed > 0 && $have >= $max_allowed );
-			$rule_class  = $disabled ? ' mhfgfwc-disabled-rule' : '';
-
-			$items_per_row = isset( $data['rule']['items_per_row'] ) ? (int) $data['rule']['items_per_row'] : 4;
-			$cols_class    = ' mhfgfwc-cols-' . max( 1, min( 6, $items_per_row ) );
-
-			echo '<div class="mhfgfwc-rule-group' . esc_attr( $rule_class . $cols_class ) . '" data-rule="' . esc_attr( $rule_id ) . '">';
-
-			$raw_gifts = isset( $data['rule']['gifts'] ) ? $data['rule']['gifts'] : array();
-			$gifts     = array_filter( (array) maybe_unserialize( $raw_gifts ), 'is_numeric' );
-
-			echo '<div class="mhfgfwc-grid">';
-
-			foreach ( $gifts as $prod_id ) {
-				$prod_id = (int) $prod_id;
-				$product = wc_get_product( $prod_id );
-				if ( ! $product || 'publish' !== $product->get_status() ) {
-					continue;
-				}
-
-				echo '<div class="mhfgfwc-gift-item">';
-				echo '<div class="mhfgfwc-thumb">' . wp_kses_post( $product->get_image( 'woocommerce_thumbnail' ) ) . '</div>';
-				echo '<div class="mhfgfwc-title">' . esc_html( $product->get_name() ) . '</div>';
-
-				if ( isset( $gift_cart[ $rule_id ][ $prod_id ] ) ) {
-					$item_key = (string) $gift_cart[ $rule_id ][ $prod_id ];
-					echo '<a href="#" class="mhfgfwc-remove-gift" data-item-key="' . esc_attr( $item_key ) . '">' . esc_html__( 'Remove Gift', 'mh-free-gifts-for-woocommerce' ) . '</a>';
-				} elseif ( ! $disabled ) {
-					echo '<a href="#" class="mhfgfwc-add-gift" data-rule="' . esc_attr( $rule_id ) . '" data-product="' . esc_attr( $prod_id ) . '">' . esc_html__( 'Add Gift', 'mh-free-gifts-for-woocommerce' ) . '</a>';
-				}
-
-				echo '</div>';
-			}
-
-			echo '</div></div>';
-		}
+		// 🔹 Use shared inner renderer
+		$this->render_gifts_section_inner();
 
 		echo '</div>';
 	}
     
-    private function ensure_available_gifts_map() {
-        $session_key = apply_filters( 'mhfgfwc_session_key', 'mhfgfwc_available_gifts' );
-        $map = WC()->session->get( $session_key, array() );
+	private function ensure_available_gifts_map() {
+		$session_key = apply_filters( 'mhfgfwc_session_key', 'mhfgfwc_available_gifts' );
+		$map = WC()->session->get( $session_key, array() );
 
-        // 🔁 Compare global rules revision to the one stored in session
-        $global_rev  = (int) get_option( 'mhfgfwc_rules_rev', 0 );
-        $session_rev = (int) WC()->session->get( 'mhfgfwc_rules_rev', 0 );
+		// 🔁 Compare global rules revision to the one stored in session
+		$global_rev  = (int) get_option( 'mhfgfwc_rules_rev', 0 );
+		$session_rev = (int) WC()->session->get( 'mhfgfwc_rules_rev', 0 );
 
-        // If we already have a map and the revision matches, keep it
-        if ( ! empty( $map ) && $global_rev === $session_rev ) {
-            return $map;
-        }
-        
-        if ( ! class_exists( 'MHFGFWC_DB' ) ) {
-            // Still update rev so we don’t keep rebuilding pointlessly
-            WC()->session->set( 'mhfgfwc_rules_rev', $global_rev );
-            return array();
-        }
+		// If we already have a map and the revision matches, keep it
+		if ( ! empty( $map ) && $global_rev === $session_rev ) {
+			return $map;
+		}
+		
+		if ( ! class_exists( 'MHFGFWC_DB' ) ) {
+			// Still update rev so we don’t keep rebuilding pointlessly
+			WC()->session->set( 'mhfgfwc_rules_rev', $global_rev );
+			return array();
+		}
 
-        // Build a minimal availability map based on active rules and current cart.
-        $rules = MHFGFWC_DB::get_active_rules();
-        $built = array();
+		// Build a minimal availability map based on active rules and current cart.
+		$rules = MHFGFWC_DB::get_active_rules();
+		$built = array();
 
-        foreach ( (array) $rules as $row ) {
-            $row = is_object( $row ) ? get_object_vars( $row ) : (array) $row;
-            $rid = isset( $row['id'] ) ? (int) $row['id'] : 0;
-            if ( ! $rid ) continue;
+		foreach ( (array) $rules as $row ) {
+			$row = is_object( $row ) ? get_object_vars( $row ) : (array) $row;
+			$rid = isset( $row['id'] ) ? (int) $row['id'] : 0;
+			if ( ! $rid ) continue;
 
-            $gifts = array_filter( (array) maybe_unserialize( $row['gifts'] ?? array() ), 'is_numeric' );
-            if ( empty( $gifts ) ) continue;
+			$gifts = array_filter( (array) maybe_unserialize( $row['gifts'] ?? array() ), 'is_numeric' );
+			if ( empty( $gifts ) ) continue;
 
-            $built[ $rid ] = array(
-                'allowed' => isset( $row['gift_quantity'] ) ? (int) $row['gift_quantity'] : 1,
-                'gifts'   => array_map( 'intval', $gifts ),
-                'rule'    => array(
-                    'items_per_row' => isset( $row['items_per_row'] ) ? (int) $row['items_per_row'] : 4,
-                    'gifts'         => $gifts,
-                ),
-            );
-        }
+			$built[ $rid ] = array(
+				'allowed' => isset( $row['gift_quantity'] ) ? (int) $row['gift_quantity'] : 1,
+				'gifts'   => array_map( 'intval', $gifts ),
+				'rule'    => array(
+					'items_per_row' => isset( $row['items_per_row'] ) ? (int) $row['items_per_row'] : 4,
+					'gifts'         => $gifts,
+				),
+			);
+		}
 
-        // ✅ Save both the map and the revision into the session
-        WC()->session->set( $session_key, $built );
-        WC()->session->set( 'mhfgfwc_rules_rev', $global_rev );
-        return $built;
-    }
+		// ✅ Save both the map and the revision into the session
+		WC()->session->set( $session_key, $built );
+		WC()->session->set( 'mhfgfwc_rules_rev', $global_rev );
+		return $built;
+	}
     
-    /**
-     * Allowed tags/attributes for the Free Gifts markup.
-     */
-    private function kses_allowed_gift_markup() {
-        return [
-            'div'  => [
-                'class'     => true,
-                'data-rule' => true,
-            ],
-            'h3'   => [ 'class' => true ],
-            'span' => [ 'class' => true ],
-            'a'    => [
-                'href'          => true,
-                'class'         => true,
-                'data-rule'     => true,
-                'data-product'  => true,
-                'data-item-key' => true,
-                'aria-label'    => true,
-            ],
-            'img'  => [
-                'src'    => true,
-                'class'  => true,
-                'alt'    => true,
-                'srcset' => true,
-                'sizes'  => true,
-                'width'  => true,
-                'height' => true,
-                'loading'=> true,
-                'decoding'=> true,
-            ],
-        ];
-    }
-
+	/**
+	 * Allowed tags/attributes for the Free Gifts markup.
+	 */
+	private function kses_allowed_gift_markup() {
+		return [
+			'div'  => [
+				'class'     => true,
+				'data-rule' => true,
+			],
+			'h3'   => [ 'class' => true ],
+			'span' => [ 'class' => true ],
+			'a'    => [
+				'href'          => true,
+				'class'         => true,
+				'data-rule'     => true,
+				'data-product'  => true,
+				'data-item-key' => true,
+				'aria-label'    => true,
+			],
+			'img'  => [
+				'src'    => true,
+				'class'  => true,
+				'alt'    => true,
+				'srcset' => true,
+				'sizes'  => true,
+				'width'  => true,
+				'height' => true,
+				'loading'=> true,
+				'decoding'=> true,
+			],
+		];
+	}
     
-    /**
-     * AJAX: return the gift grid HTML (used by Cart/Checkout Blocks mount).
-     */
-    public function ajax_render_gifts() {
-        check_ajax_referer( 'mhfgfwc_frontend_nonce', 'nonce' );
+    
+	/**
+	 * Build a map of existing gift items in cart: [ rule_id => [ product_id => cart_item_key ] ]
+	 *
+	 * @return array
+	 */
+	private function map_gifts_in_cart() {
+		$gift_cart = array();
+		foreach ( WC()->cart->get_cart() as $cart_item_key => $item ) {
+			if ( ! empty( $item['mhfgfwc_gift'] ) ) {
+				$rid = (int) $item['mhfgfwc_gift'];
+				$pid = (int) $item['product_id'];
+				if ( ! isset( $gift_cart[ $rid ] ) ) {
+					$gift_cart[ $rid ] = array();
+				}
+				$gift_cart[ $rid ][ $pid ] = $cart_item_key;
+			}
+		}
+		return $gift_cart;
+	}
+    
+	/**
+	 * Schedule and safely remove ineligible gifts after WooCommerce finishes recalculating totals.
+	 *
+	 * @param array $eligible Eligible payload keyed by rule_id.
+	 * @param int   $user_id  Current user ID (unused).
+	 */
+	public function prune_ineligible_gifts( $eligible, $user_id ) {
+		if ( ! function_exists( 'WC' ) || ! WC()->cart ) {
+			return;
+		}
 
-        // Make sure availability exists even if user lands directly on checkout.
-        $this->ensure_available_gifts_map();
-        
-        // Reuse the exact same output as the classic cart section.
-        ob_start();
-        $this->display_cart_gifts();
-        $html = ob_get_clean();
+		$eligible = is_array( $eligible ) ? $eligible : array();
+		$gift_cart = $this->map_gifts_in_cart();
 
-        // Compliant: escape with an explicit KSES schema so markup remains intact. (Blocks code will drop it into the slot)
-	    echo wp_kses( $html, $this->kses_allowed_gift_markup() );
-        wp_die();
-    }
+		// Store the diff in transient memory for removal later.
+		$to_remove = array();
+
+		foreach ( $gift_cart as $rule_id => $products_map ) {
+			// Entire rule invalid
+			if ( empty( $eligible[ $rule_id ] ) || empty( $eligible[ $rule_id ]['gifts'] ) ) {
+				foreach ( $products_map as $pid => $cart_item_key ) {
+					$to_remove[ $cart_item_key ] = true;
+				}
+				continue;
+			}
+
+			$allowed        = max( 1, (int) ( $eligible[ $rule_id ]['allowed'] ?? 1 ) );
+			$valid_products = array_map( 'intval', (array) $eligible[ $rule_id ]['gifts'] );
+
+			// Invalid product gifts
+			foreach ( $products_map as $pid => $cart_item_key ) {
+				if ( ! in_array( (int) $pid, $valid_products, true ) ) {
+					$to_remove[ $cart_item_key ] = true;
+					unset( $products_map[ $pid ] );
+				}
+			}
+
+			// Over-limit cleanup
+			if ( count( $products_map ) > $allowed ) {
+				$excess = array_slice( array_values( $products_map ), $allowed );
+				foreach ( $excess as $cart_item_key ) {
+					$to_remove[ $cart_item_key ] = true;
+				}
+			}
+		}
+
+		// Nothing to remove? Bail.
+		if ( empty( $to_remove ) ) {
+			return;
+		}
+
+		// Defer actual removal until WC has finished totals
+		add_action( 'woocommerce_cart_loaded_from_session', function() use ( $to_remove ) {
+			foreach ( $to_remove as $cart_item_key => $_ ) {
+				if ( isset( WC()->cart->cart_contents[ $cart_item_key ] ) ) {
+					WC()->cart->remove_cart_item( $cart_item_key );
+				}
+			}
+		}, 20 );
+	}
+
+	public function inject_refresh_js() {
+		if ( is_cart() || is_checkout() ) {
+			add_action( 'wp_footer', function() {
+				?>
+				<script>
+				document.addEventListener('DOMContentLoaded',function(){
+					if (typeof jQuery!=='undefined') {
+						var $=jQuery;
+						// refresh mini-cart fragments
+						if (typeof wc_cart_fragments_params!=='undefined'){
+							$(document.body).trigger('wc_fragment_refresh');
+						}
+						// refresh totals on checkout page
+						if ($('form.woocommerce-checkout').length){
+							$(document.body).trigger('update_checkout');
+						}
+					}
+				});
+				</script>
+				<?php
+			}, 99 );
+		}
+	}
+    
+	/**
+	 * AJAX: return the gift grid HTML (used by Cart/Checkout Blocks mount).
+	 */
+	public function ajax_render_gifts() {
+		check_ajax_referer( 'mhfgfwc_frontend_nonce', 'nonce' );
+
+		// Make sure availability exists even if user lands directly on checkout.
+		$this->ensure_available_gifts_map();
+		
+		// Reuse the exact same output as the classic cart section.
+		ob_start();
+		$this->display_cart_gifts();
+		$html = ob_get_clean();
+
+		// Compliant: escape with an explicit KSES schema so markup remains intact. (Blocks code will drop it into the slot)
+		echo wp_kses( $html, $this->kses_allowed_gift_markup() );
+		wp_die();
+	}
 
 
 	/**
@@ -548,6 +676,8 @@ final class MHFGFWC_Frontend {
 			'mhfgfwc_gift'     => $rid,
 			'mhfgfwc_gift_uid' => $uid,
 		);
+        
+		//error_log( "MHFGFWC: add_gift pid=$pid rid=$rid session=" . print_r( WC()->session->get( 'mhfgfwc_available_gifts' ), true ) );
 
 		if ( $product instanceof WC_Product_Variation ) {
 			$cart_key = WC()->cart->add_to_cart(
@@ -557,6 +687,7 @@ final class MHFGFWC_Frontend {
 				$product->get_variation_attributes(),
 				$gift_meta
 			);
+			//error_log( "MHFGFWC Variations: cart_key=" . var_export( $cart_key, true ) );
 		} else {
 			$cart_key = WC()->cart->add_to_cart(
 				$pid,
@@ -565,6 +696,7 @@ final class MHFGFWC_Frontend {
 				array(),
 				$gift_meta
 			);
+			//error_log( "MHFGFWC: cart_key=" . var_export( $cart_key, true ) );
 		}
 
 		if ( ! $cart_key ) {
@@ -594,25 +726,7 @@ final class MHFGFWC_Frontend {
 		wp_send_json_error( array( 'message' => esc_html__( 'Could not remove gift.', 'mh-free-gifts-for-woocommerce' ) ) );
 	}
 
-	/**
-	 * Build a map of existing gift items in cart: [ rule_id => [ product_id => cart_item_key ] ]
-	 *
-	 * @return array
-	 */
-	private function map_gifts_in_cart() {
-		$gift_cart = array();
-		foreach ( WC()->cart->get_cart() as $cart_item_key => $item ) {
-			if ( ! empty( $item['mhfgfwc_gift'] ) ) {
-				$rid = (int) $item['mhfgfwc_gift'];
-				$pid = (int) $item['product_id'];
-				if ( ! isset( $gift_cart[ $rid ] ) ) {
-					$gift_cart[ $rid ] = array();
-				}
-				$gift_cart[ $rid ][ $pid ] = $cart_item_key;
-			}
-		}
-		return $gift_cart;
-	}
+	
 }
 
 // Initialize frontend

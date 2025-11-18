@@ -1,34 +1,74 @@
-jQuery(function($){
-  // --- Toggle setup (no CSS injection; dashicons are enqueued in PHP) ---
-  $('.woocommerce-form-coupon-toggle').each(function(){
-    var $wrap   = $(this);
-    var $toggle = $wrap.find('.mhfgfwc-show-gifts-toggle');
-    var $icon   = $toggle.find('.mhfgfwc-toggle-icon');
-    var $panel  = $wrap.next('.mhfgfwc-gift-section');
+/* global jQuery, mhfgfwcFrontend, wc_cart_fragments_params, wc_checkout_params */
+jQuery(function ($) {
 
-    // Ensure icon exists and is "down" initially
-    if (!$icon.length) {
-      $icon = $('<span class="mhfgfwc-toggle-icon dashicons dashicons-arrow-down-alt2"></span>');
-      $toggle.append($icon);
-    } else {
-      $icon.removeClass('dashicons-arrow-up-alt2').addClass('dashicons-arrow-down-alt2');
+  /* -----------------------------------------------------------
+   * Helpers
+   * ----------------------------------------------------------- */
+  function refreshAfterChange() {
+    if (typeof wc_cart_fragments_params !== 'undefined') {
+      $(document.body).trigger('wc_fragment_refresh');
     }
 
-    // Start collapsed
-    if ($panel.length) {
-      $panel.hide();
-      $wrap.removeClass('open');
-      $toggle.removeClass('opened');
+    if ($('.woocommerce-cart-form').length) {
+      setTimeout(() => window.location.reload(), 250);
+      return;
     }
-  });
 
-  // Toggle open/close (like Woo coupon)
-  $(document).on('click', '.mhfgfwc-show-gifts-toggle', function(e){
+    if ($('form.woocommerce-checkout').length) {
+      $(document.body).trigger('update_checkout');
+      return;
+    }
+  }
+
+  function lockButton($btn, label) {
+    $btn.prop('disabled', true)
+        .addClass('is-loading')
+        .data('orig', $btn.text())
+        .text(label);
+  }
+
+  function unlockButton($btn, label) {
+    const orig = $btn.data('orig');
+    $btn.prop('disabled', false)
+        .removeClass('is-loading')
+        .text(label || orig || $btn.text());
+  }
+
+  /* -----------------------------------------------------------
+   * Toggle UI
+   * ----------------------------------------------------------- */
+  function initToggleBehaviour(context) {
+    const $root = context ? $(context) : $(document);
+
+    $root.find('.woocommerce-form-coupon-toggle').each(function () {
+      var $wrap = $(this);
+      var $toggle = $wrap.find('.mhfgfwc-show-gifts-toggle');
+      var $icon = $toggle.find('.mhfgfwc-toggle-icon');
+      var $panel = $wrap.next('.mhfgfwc-gift-section');
+
+      if (!$icon.length) {
+        $icon = $('<span class="mhfgfwc-toggle-icon dashicons dashicons-arrow-down-alt2"></span>');
+        $toggle.append($icon);
+      }
+
+      if ($panel.length && !$wrap.hasClass('mhfgfwc-init')) {
+        $panel.hide();
+        $wrap.removeClass('open');
+        $toggle.removeClass('opened');
+        $wrap.addClass('mhfgfwc-init');
+      }
+    });
+  }
+
+  initToggleBehaviour();
+
+  $(document).on('click', '.mhfgfwc-show-gifts-toggle', function (e) {
     e.preventDefault();
-    var $link  = $(this);
-    var $wrap  = $link.closest('.woocommerce-form-coupon-toggle');
+
+    var $link = $(this);
+    var $wrap = $link.closest('.woocommerce-form-coupon-toggle');
     var $panel = $wrap.next('.mhfgfwc-gift-section');
-    var $icon  = $link.find('.mhfgfwc-toggle-icon');
+    var $icon = $link.find('.mhfgfwc-toggle-icon');
 
     if (!$panel.length) return;
 
@@ -37,96 +77,125 @@ jQuery(function($){
     $link.toggleClass('opened');
 
     if ($link.hasClass('opened')) {
-      $icon.removeClass('dashicons-arrow-down-alt2').addClass('dashicons-arrow-up-alt2');
+      $icon.removeClass('dashicons-arrow-down-alt2')
+           .addClass('dashicons-arrow-up-alt2');
     } else {
-      $icon.removeClass('dashicons-arrow-up-alt2').addClass('dashicons-arrow-down-alt2');
+      $icon.removeClass('dashicons-arrow-up-alt2')
+           .addClass('dashicons-arrow-down-alt2');
     }
   });
 
-  // --- Add gift ---
-  $(document).on('click', '.mhfgfwc-add-gift', function(e){
+  /* -----------------------------------------------------------
+   * Add Gift
+   * ----------------------------------------------------------- */
+  $(document).on('click', '.mhfgfwc-add-gift', function (e) {
     e.preventDefault();
     var $btn = $(this);
-    var pid  = $btn.data('product');
-    var rid  = $btn.data('rule');
 
-    $btn.prop('disabled', true).text(mhfgfwcFrontend.i18n.adding);
+    if ($btn.is(':disabled')) return;
+
+    var pid = parseInt($btn.data('product'), 10) || 0;
+    var rid = parseInt($btn.data('rule'), 10) || 0;
+
+    lockButton($btn, mhfgfwcFrontend.i18n.adding);
 
     $.post(mhfgfwcFrontend.ajax_url_add, {
-      nonce:   mhfgfwcFrontend.nonce,
+      nonce: mhfgfwcFrontend.nonce,
       product: pid,
-      rule:    rid
-    }).done(function(response){
-      if (response.success) {
-        location.reload();
-      } else {
-        alert(response.data.message || mhfgfwcFrontend.i18n.ajax_error);
-        $btn.prop('disabled', false).text(mhfgfwcFrontend.i18n.add);
-      }
-    }).fail(function(){
-      alert(mhfgfwcFrontend.i18n.ajax_error);
-      $btn.prop('disabled', false).text(mhfgfwcFrontend.i18n.add);
-    });
+      rule: rid
+    })
+      .done(function (response) {
+        if (response && response.success) {
+          if ($('form.woocommerce-checkout').length) {
+            $(document.body).trigger('update_checkout');
+          } else {
+            refreshAfterChange();
+          }
+        } else {
+          alert(response?.data?.message || mhfgfwcFrontend.i18n.ajax_error);
+          unlockButton($btn, mhfgfwcFrontend.i18n.add);
+        }
+      })
+      .fail(function () {
+        alert(mhfgfwcFrontend.i18n.ajax_error);
+        unlockButton($btn, mhfgfwcFrontend.i18n.add);
+      });
   });
 
-  // --- Remove gift ---
-  $(document).on('click', '.mhfgfwc-remove-gift', function(e){
+  /* -----------------------------------------------------------
+   * Remove Gift
+   * ----------------------------------------------------------- */
+  $(document).on('click', '.mhfgfwc-remove-gift', function (e) {
     e.preventDefault();
-    var $btn    = $(this);
+    var $btn = $(this);
+
+    if ($btn.is(':disabled')) return;
+
     var itemKey = $btn.data('item-key');
 
-    $btn.prop('disabled', true).text(mhfgfwcFrontend.i18n.removing);
+    lockButton($btn, mhfgfwcFrontend.i18n.removing);
 
     $.post(mhfgfwcFrontend.ajax_url_remove, {
-      nonce:    mhfgfwcFrontend.nonce,
+      nonce: mhfgfwcFrontend.nonce,
       item_key: itemKey
-    }).done(function(response){
-      if (response.success) {
-        location.reload();
-      } else {
-        alert(response.data.message || mhfgfwcFrontend.i18n.ajax_error);
-        $btn.prop('disabled', false).text(mhfgfwcFrontend.i18n.remove);
-      }
-    }).fail(function(){
-      alert(mhfgfwcFrontend.i18n.ajax_error);
-      $btn.prop('disabled', false).text(mhfgfwcFrontend.i18n.remove);
-    });
+    })
+      .done(function (response) {
+        if (response && response.success) {
+          if ($('form.woocommerce-checkout').length) {
+            $(document.body).trigger('update_checkout');
+          } else {
+            refreshAfterChange();
+          }
+        } else {
+          alert(response?.data?.message || mhfgfwcFrontend.i18n.ajax_error);
+          unlockButton($btn, mhfgfwcFrontend.i18n.remove);
+        }
+      })
+      .fail(function () {
+        alert(mhfgfwcFrontend.i18n.ajax_error);
+        unlockButton($btn, mhfgfwcFrontend.i18n.remove);
+      });
   });
+
+  /* -----------------------------------------------------------
+   * Checkout Refresh → Reload the Gift HTML
+   * ----------------------------------------------------------- */
+  $(document.body).on('updated_checkout', function () {
+
+    var $section = $('.mhfgfwc-gift-section');
+    if (!$section.length) return;
+
+    $.ajax({
+      type: 'POST',
+      url: mhfgfwcFrontend.ajax_url_refresh,
+      data: {
+        nonce: mhfgfwcFrontend.nonce
+      },
+      success: function (res) {
+        if (res && res.success && res.data && res.data.html) {
+
+          // Keep wrapper, replace inner content only
+          $section.fadeTo(120, 0.3, function () {
+
+            $section.html(res.data.html);
+
+            // Remove greyed-out class if any
+            $section.removeClass('mhfgfwc-disabled-rule');
+
+            // Re-initialise toggle UI + button bindings
+            initToggleBehaviour($section);
+
+            // If you have a global event binder, call it
+            if (typeof window.mhfgfwcBindGiftEvents === 'function') {
+              window.mhfgfwcBindGiftEvents($section[0]);
+            }
+
+            $section.fadeTo(120, 1);
+          });
+        }
+      }
+    });
+
+  });
+
 });
-
-// Render gifts UI into a given container element.
-// You can replace this inner function with your existing renderer if you have one.
-(function () {
-	if (typeof window === 'undefined') return;
-
-	function renderGiftsInto(container) {
-		if (!container) return;
-
-		// If you already append the same markup elsewhere, you can
-		// refactor that code into a function and call it here instead.
-		// Minimal, generic rendering (adjust classes & HTML to match your current UI):
-		container.innerHTML = `
-			<div class="mhfgfwc-gifts-grid" data-mhfgfwc-root>
-				<!-- The same grid/items your classic cart renders.
-					 If your PHP currently prints the grid, you can also expose
-					 an endpoint that returns the HTML and fetch() it here. -->
-			</div>
-		`;
-
-		// If your existing code binds events to ".mhfgfwc-gifts-grid", call the binder now:
-		if (typeof window.mhfgfwcBindGiftEvents === 'function') {
-			window.mhfgfwcBindGiftEvents(container.querySelector('[data-mhfgfwc-root]'));
-		}
-	}
-
-	// Listen for a request from blocks.js to mount into a specific container.
-	document.addEventListener('mhfgfwc:mount', function (ev) {
-		try {
-			const container = ev && ev.detail && ev.detail.container ? ev.detail.container : null;
-			if (container) renderGiftsInto(container);
-		} catch (e) {
-			// swallow to avoid console noise for merchants
-			// console.error('[mhfgfwc] mount failed', e);
-		}
-	});
-})();
