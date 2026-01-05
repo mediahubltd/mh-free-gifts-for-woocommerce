@@ -5,7 +5,7 @@ Description: Let customers choose a free gift when cart criteria are met (thresh
 Tags: free gifts for woocommerce, buy one get one, free gift, Gift Product Woocommerce, WooCommerce gift
 Requires at least: 6.0
 Tested up to: 6.8
-Stable tag: 1.0.9
+Stable tag: 1.0.10
 Version: 1.0.10
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
