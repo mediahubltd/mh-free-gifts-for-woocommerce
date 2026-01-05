@@ -173,6 +173,11 @@ final class MHFGFWC_Frontend {
 		global $post;
 		$is_block_cart     = $post && function_exists( 'has_block' ) && has_block( 'woocommerce/cart', $post );
 		$is_block_checkout = $post && function_exists( 'has_block' ) && has_block( 'woocommerce/checkout', $post );
+        
+        $theme_supports_blocks = function_exists( 'wc_current_theme_supports_woocommerce_blocks' )
+            ? wc_current_theme_supports_woocommerce_blocks()
+            : false;
+
 
 		$should_enqueue_blocks = ( $is_block_cart || $is_block_checkout || ( ( is_cart() || is_checkout() ) && $theme_supports_blocks ) );
 

@@ -56,25 +56,30 @@ final class MHFGFWC_Engine {
 	 */
 	public function init_hooks() {
 		$this->rules = $this->load_rules();
-
-		// Evaluate in multiple late-but-safe places so first page loads work.
-		add_action( 'template_redirect', array( $this, 'maybe_eval_for_page' ), 1 ); // early in templating.
-		add_action( 'woocommerce_before_cart', array( $this, 'evaluate_cart_now' ), 1 );
-		add_action( 'woocommerce_before_checkout_form', array( $this, 'evaluate_cart_now' ), 1 );
-		add_action( 'woocommerce_cart_loaded_from_session', array( $this, 'evaluate_cart_now' ), 20 );
-		add_action( 'woocommerce_cart_updated', array( $this, 'evaluate_cart_now' ), 20 );
-
-		// Clear when done.
-		add_action( 'woocommerce_cart_emptied', array( $this, 'clear_session' ) );
-		add_action( 'woocommerce_thankyou', array( $this, 'clear_session' ) );
         
-        add_action( 'woocommerce_before_calculate_totals', array( $this, 'evaluate_cart' ), 1 );
-        add_action( 'woocommerce_add_to_cart', array( $this, 'evaluate_cart' ), 20 );
-        add_action( 'woocommerce_cart_item_removed', array( $this, 'evaluate_cart' ), 20 );
+        add_action(
+            'woocommerce_cart_loaded_from_session',
+            [ $this, 'evaluate_cart' ],
+            20
+        );
+
+        add_action(
+            'woocommerce_before_calculate_totals',
+            [ $this, 'evaluate_cart' ],
+            5
+        );
+        
+        add_action(
+            'mhfgfwc_after_evaluate_cart',
+            [ $this, 'remove_ineligible_gifts' ],
+            10,
+            2
+        );
+
 
 
 	}
-
+    
 	/**
 	 * Load active rules (cached in DB helper).
 	 *
@@ -120,9 +125,11 @@ final class MHFGFWC_Engine {
 	 */
 	public function evaluate_cart( $cart ) {
 		// Do not run in wp-admin (except AJAX) to avoid overhead.
-		if ( is_admin() && ! defined( 'DOING_AJAX' ) ) {
-			return;
-		}
+		if ( ! did_action( 'woocommerce_init' ) ) {
+            return;
+        }
+
+
 		if ( ! function_exists( 'WC' ) || ! WC()->cart || ! WC()->session ) {
 			return;
 		}
@@ -298,6 +305,114 @@ final class MHFGFWC_Engine {
 		 */
 		do_action( 'mhfgfwc_after_evaluate_cart', $eligible, $user_id );
 	}
+    
+    /*public function enforce_gift_rules() {
+        if ( is_admin() && ! defined( 'DOING_AJAX' ) ) {
+            return;
+        }
+
+        if ( ! WC()->cart || ! WC()->session ) {
+            return;
+        }
+
+        $session_key = apply_filters( 'mhfgfwc_session_key', self::SESSION_KEY );
+        $eligible    = (array) WC()->session->get( $session_key, array() );
+
+        foreach ( WC()->cart->get_cart() as $cart_item_key => $cart_item ) {
+
+            if ( empty( $cart_item['mhfgfwc_rule_id'] ) ) {
+                continue;
+            }
+
+            $rule_id = absint( $cart_item['mhfgfwc_rule_id'] );
+
+            // Rule no longer eligible → remove gift
+            if ( empty( $eligible[ $rule_id ] ) ) {
+                WC()->cart->remove_cart_item( $cart_item_key );
+            }
+        }
+    }*/
+
+    public function enforce_gift_rules( $cart ) {
+        // Do not run in wp-admin (except AJAX)
+        if ( is_admin() && ! defined( 'DOING_AJAX' ) ) {
+            return;
+        }
+
+        if ( ! function_exists( 'WC' ) || ! WC()->cart || ! WC()->session ) {
+            return;
+        }
+
+        // Prevent recursion / loops
+        static $running = false;
+        if ( $running ) {
+            return;
+        }
+
+        $session_key = apply_filters( 'mhfgfwc_session_key', self::SESSION_KEY );
+        $eligible    = (array) WC()->session->get( $session_key, array() );
+
+        $to_remove = array();
+
+        foreach ( WC()->cart->get_cart() as $cart_item_key => $cart_item ) {
+
+            // Gifts are tagged with mhfgfwc_gift = rule_id
+            if ( empty( $cart_item['mhfgfwc_gift'] ) ) {
+                continue;
+            }
+
+            $rule_id = absint( $cart_item['mhfgfwc_gift'] );
+
+            // Rule no longer eligible → remove gift
+            if ( $rule_id && empty( $eligible[ $rule_id ] ) ) {
+                $to_remove[] = $cart_item_key;
+            }
+        }
+
+        if ( empty( $to_remove ) ) {
+            return;
+        }
+
+        // Defer the actual removal until after totals to avoid calc loops.
+        add_action( 'woocommerce_after_calculate_totals', function() use ( $to_remove, &$running ) {
+            if ( ! WC()->cart ) {
+                return;
+            }
+
+            $running = true;
+
+            foreach ( $to_remove as $cart_item_key ) {
+                if ( isset( WC()->cart->cart_contents[ $cart_item_key ] ) ) {
+                    WC()->cart->remove_cart_item( $cart_item_key );
+                }
+            }
+
+            $running = false;
+        }, 999 );
+    }
+
+    public function remove_ineligible_gifts( $eligible, $user_id ) {
+
+        if ( ! WC()->cart ) {
+            return;
+        }
+
+        foreach ( WC()->cart->get_cart() as $cart_item_key => $cart_item ) {
+
+            // Gifts are tagged with mhfgfwc_gift = rule_id
+            if ( empty( $cart_item['mhfgfwc_gift'] ) ) {
+                continue;
+            }
+
+            $rule_id = absint( $cart_item['mhfgfwc_gift'] );
+
+            // Rule no longer eligible → remove gift
+            if ( empty( $eligible[ $rule_id ] ) ) {
+                WC()->cart->remove_cart_item( $cart_item_key );
+            }
+        }
+    }
+
 
 	/**
 	 * Normalize a potentially nested rules array into a flat array of associative arrays.
@@ -398,20 +513,63 @@ final class MHFGFWC_Engine {
 	 * @param \WC_Cart $cart Cart.
 	 * @return float
 	 */
-	private function get_cart_subtotal_for_rules( $cart ) {
+	/*private function get_cart_subtotal_for_rules( $cart ) {
 		$contents_total = (float) $cart->get_cart_contents_total();
 		$subtotal = ( function_exists( 'wc_prices_include_tax' ) && wc_prices_include_tax() )
 			? $contents_total + (float) $cart->get_cart_contents_tax()
 			: $contents_total;
 
-		/**
-		 * Filter the computed cart subtotal used by the gift engine.
-		 *
-		 * @param float    $subtotal
-		 * @param \WC_Cart $cart
-		 */
 		return (float) apply_filters( 'mhfgfwc_rules_subtotal', $subtotal, $cart );
-	}
+	}*/
+    
+    private function get_cart_subtotal_for_rules( $cart ) {
+        $subtotal = 0.0;
+
+        foreach ( $cart->get_cart() as $item ) {
+
+            if ( empty( $item['data'] ) || empty( $item['quantity'] ) ) {
+                continue;
+            }
+
+            // Exclude free gifts from threshold calculations
+            if ( ! empty( $item['mhfgfwc_rule_id'] ) ) {
+                continue;
+            }
+
+            $product = $item['data'];
+
+            // WooCommerce-safe price (handles tax settings correctly)
+            $price = (float) wc_get_price_to_display( $product );
+
+            $subtotal += $price * (int) $item['quantity'];
+        }
+
+        /**
+         * Filter the computed cart subtotal used by the gift engine.
+         *
+         * @param float    $subtotal
+         * @param WC_Cart  $cart
+         */
+        return (float) apply_filters( 'mhfgfwc_rules_subtotal', $subtotal, $cart );
+    }
+
+    public function handle_cart_item_removed( $cart_item_key, $cart ) {
+
+        if ( ! WC()->cart || ! WC()->session ) {
+            return;
+        }
+
+        // Re-evaluate eligibility using live cart contents
+        $this->evaluate_cart( WC()->cart );
+
+        // Enforce removal of gifts immediately
+        $this->enforce_gift_rules();
+
+        // Force WooCommerce to recalculate totals
+        WC()->cart->calculate_totals();
+    }
+
+
 
 	/**
 	 * Total usage across all users for a rule.

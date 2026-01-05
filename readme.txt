@@ -6,7 +6,7 @@ Tags: free gifts for woocommerce, buy one get one, free gift, Gift Product Wooco
 Requires at least: 6.0
 Tested up to: 6.8
 Stable tag: 1.0.9
-Version: 1.0.9
+Version: 1.0.10
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 Donate link: https://ko-fi.com/adk77
@@ -47,6 +47,7 @@ Display Settings
 * **Items Per Row (Cart)** (decide how many items in a row you want displayed)
 Usage Restrictions
 * **Product Dependency** (Lock down rule to only allow free gifts to activate if any of these products are in the cart)
+* **Product Category Dependency (Limit rule to selected categories)
 * **User Dependency** (Limit he rule to individual customers)
 * **Registered Users** Only (Only allowed existing customers to activate the rule)
 * **Number of Gifts Allowed** (Restrict the number of gifts a customer can add to their cart)
@@ -93,6 +94,9 @@ Yes! There’s no premium version or upsells. Everything is included for free.
 Support is provided via the WordPress.org forums or through the Mediahub support site.
 
 == Changelog ==
+
+= 1.0.10 (2026-01-05) =
+* [Fixed] Cart Evaluation flow upgraded
 
 = 1.0.9 (2025-11-13) =
 * [Fixed] Gift wasn't being removed from cart when threshold was no longer met
