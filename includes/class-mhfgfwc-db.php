@@ -144,13 +144,11 @@ final class MHFGFWC_DB {
 				  WHERE CAST(status AS UNSIGNED) = %d
 				    AND (
 				            {$from_col} IS NULL
-				         OR {$from_col} = ''
 				         OR {$from_col} = '0000-00-00 00:00:00'
 				         OR {$from_col} <= %s
 				        )
 				    AND (
 				            {$to_col} IS NULL
-				         OR {$to_col} = ''
 				         OR {$to_col} = '0000-00-00 00:00:00'
 				         OR {$to_col} >= %s
 				        )",
