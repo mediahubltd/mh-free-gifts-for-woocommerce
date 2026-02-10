@@ -349,6 +349,7 @@ class MHFGFWC_Admin {
         }
 
         $gifts     = $rule ? maybe_unserialize( $rule->gifts ) : [];
+        $auto_add  = $rule ? (int) ( $rule->auto_add_gift ?? 0 ) : 0;
         $prod_deps = $rule ? maybe_unserialize( $rule->product_dependency ) : [];
         $user_deps = $rule ? maybe_unserialize( $rule->user_dependency ) : [];
         $cat_deps = $rule ? maybe_unserialize( $rule->category_dependency ) : [];
@@ -391,6 +392,18 @@ class MHFGFWC_Admin {
                                         <option value="<?php echo esc_attr( $gid ); ?>" selected><?php echo esc_html( $prod->get_name() ); ?></option>
                                 <?php endif; endforeach; ?>
                             </select>
+                            <p class="description">
+                                <?php esc_html_e( 'Tip: Enable “Auto-add gift” below if you want the gift to be automatically added when the rule is met. Auto-add only works when exactly one gift product is selected.', 'mh-free-gifts-for-woocommerce' ); ?>
+                            </p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th><label for="mhfgfwc_auto_add_gift"><?php esc_html_e( 'Auto-add Gift', 'mh-free-gifts-for-woocommerce' ); ?></label></th>
+                        <td>
+                            <label>
+                                <input type="checkbox" name="auto_add_gift" id="mhfgfwc_auto_add_gift" value="1" <?php checked( $auto_add, 1 ); ?> <?php disabled( count( (array) $gifts ) !== 1, true ); ?>>
+                                <?php esc_html_e( 'Automatically add the free gift to the cart when this rule is met (requires exactly 1 gift selected).', 'mh-free-gifts-for-woocommerce' ); ?>
+                            </label>
                         </td>
                     </tr>
                 </tbody></table>
@@ -408,7 +421,14 @@ class MHFGFWC_Admin {
                     </tr>
                     <tr>
                         <th><label for="mhfgfwc_items_per_row"><?php esc_html_e( 'Items Per Row (Cart)', 'mh-free-gifts-for-woocommerce' ); ?></label></th>
-                        <td><input name="items_per_row" id="mhfgfwc_items_per_row" type="number" min="1" max="6" value="<?php echo esc_attr( $rule->items_per_row ?? 4 ); ?>" class="small-text"></td>
+                        <td><input name="items_per_row" id="mhfgfwc_items_per_row" type="number" min="1" max="6" value="<?php echo esc_attr( $rule->items_per_row ?? 4 ); ?>" class="small-text">
+                            <p class="description">
+                                <?php esc_html_e(
+                                    'When multiple rules are active, the gift grid uses the highest Items Per Row value from all eligible rules.',
+                                    'mh-free-gifts-for-woocommerce'
+                                ); ?>
+                            </p>
+                        </td>
                     </tr>
                 </tbody></table>
 
@@ -622,6 +642,16 @@ class MHFGFWC_Admin {
         $gifts = isset( $post['gifts'] ) ? array_map( 'intval', (array) $post['gifts'] ) : [];
         $gift_quantity = isset( $post['gift_quantity'] ) ? (int) $post['gift_quantity'] : 1;
 
+        // Auto-add gift: only valid when exactly one gift product is selected.
+        $auto_add_gift = ! empty( $post['auto_add_gift'] ) ? 1 : 0;
+        if ( $auto_add_gift && 1 !== count( (array) $gifts ) ) {
+            $auto_add_gift = 0;
+        }
+        // If auto-add is enabled, enforce a single gift ID (first selected).
+        if ( $auto_add_gift && count( (array) $gifts ) > 1 ) {
+            $gifts = array_values( array_slice( (array) $gifts, 0, 1 ) );
+        }
+
         $product_dependency = isset( $post['product_dependency'] ) ? array_map( 'intval', (array) $post['product_dependency'] ) : [];
         $user_dependency    = isset( $post['user_dependency'] )    ? array_map( 'intval', (array) $post['user_dependency'] )    : [];
         $category_dependency = isset( $post['category_dependency'] ) ? array_map( 'intval', (array) $post['category_dependency'] ) : [];
@@ -653,6 +683,7 @@ class MHFGFWC_Admin {
             'limit_per_user'      => $limit_per_user,
             'gifts'               => maybe_serialize( $gifts ),
             'gift_quantity'       => $gift_quantity,
+            'auto_add_gift'       => $auto_add_gift,
             'product_dependency'  => maybe_serialize( $product_dependency ),
             'user_dependency'     => maybe_serialize( $user_dependency ),
             'category_dependency' => maybe_serialize( $category_dependency ),

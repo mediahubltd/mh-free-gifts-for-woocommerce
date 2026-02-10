@@ -76,9 +76,200 @@ final class MHFGFWC_Engine {
             2
         );
 
+        // Auto-add (and auto-swap) gifts after eligibility is computed and ineligible gifts are removed.
+        add_action(
+            'mhfgfwc_after_evaluate_cart',
+            [ $this, 'auto_add_eligible_gifts' ],
+            20,
+            2
+        );
+
 
 
 	}
+
+    /**
+     * Auto-add gifts to cart when:
+     * - rule is eligible
+     * - rule has auto_add_gift enabled
+     * - rule has exactly 1 gift product configured
+     *
+     * Also performs "auto-swap" when the rule's single gift changes.
+     *
+     * @param array $eligible Eligible rules payload keyed by rule_id.
+     * @param int   $user_id  Current user ID.
+     * @return void
+     */
+    public function auto_add_eligible_gifts( $eligible, $user_id ) {
+        if ( ! function_exists( 'WC' ) || ! WC()->cart ) {
+            return;
+        }
+
+        // Avoid doing this work in admin (except AJAX), and avoid notices during AJAX.
+        if ( is_admin() && ! defined( 'DOING_AJAX' ) ) {
+            return;
+        }
+
+        // Prevent recursion / loops.
+        static $running = false;
+        if ( $running ) {
+            return;
+        }
+
+        // Track notices per request to avoid duplicates when Woo triggers multiple cart recalcs.
+        static $notice_sent = array();
+
+        $running = true;
+
+        foreach ( (array) $eligible as $rule_id => $payload ) {
+            $rule_id = absint( $rule_id );
+            if ( $rule_id <= 0 || ! is_array( $payload ) ) {
+                continue;
+            }
+
+            $rule = (array) ( $payload['rule'] ?? array() );
+            $auto = ! empty( $rule['auto_add_gift'] );
+            if ( ! $auto ) {
+                continue;
+            }
+
+            $gifts = array_map( 'intval', (array) ( $payload['gifts'] ?? array() ) );
+            $gifts = array_values( array_filter( $gifts ) );
+            if ( 1 !== count( $gifts ) ) {
+                // Guardrail: auto-add only works with a single gift in the rule.
+                continue;
+            }
+
+            $desired_gift_id = (int) $gifts[0];
+            if ( $desired_gift_id <= 0 ) {
+                continue;
+            }
+
+            // Find existing gifts for this rule.
+            $existing = $this->get_cart_gift_items_for_rule( $rule_id, $desired_gift_id );
+
+            // If gift exists and matches, nothing to do.
+            if ( ! empty( $existing['matches_desired'] ) ) {
+                continue;
+            }
+
+            // If gifts exist but don't match the desired gift, remove them (auto-swap).
+            $had_existing = ! empty( $existing['keys'] );
+            if ( $had_existing ) {
+                foreach ( (array) $existing['keys'] as $cart_item_key ) {
+                    WC()->cart->remove_cart_item( $cart_item_key );
+                }
+            }
+
+            // Add the desired gift.
+            $added = $this->add_gift_to_cart( $desired_gift_id, $rule_id );
+
+            if ( $added && ( ! defined( 'DOING_AJAX' ) || ! DOING_AJAX ) ) {
+                $product = wc_get_product( $desired_gift_id );
+                $name    = $product ? $product->get_name() : __( 'Free gift', 'mh-free-gifts-for-woocommerce' );
+
+                $notice_key = ( $had_existing ? 'auto_swap_' : 'auto_add_' ) . $rule_id . '_' . $desired_gift_id;
+                if ( empty( $notice_sent[ $notice_key ] ) ) {
+                    $msg = $had_existing
+                        ? sprintf( __( 'Free gift updated: %s', 'mh-free-gifts-for-woocommerce' ), $name )
+                        : sprintf( __( 'Free gift added: %s', 'mh-free-gifts-for-woocommerce' ), $name );
+
+                    wc_add_notice( $msg, 'success' );
+                    $notice_sent[ $notice_key ] = true;
+                }
+            }
+        }
+
+        $running = false;
+    }
+
+    /**
+     * Return cart gift items for a rule.
+     *
+     * @param int $rule_id Rule ID.
+     * @return array {keys: string[], matches_desired: bool}
+     */
+    private function get_cart_gift_items_for_rule( $rule_id, $desired_gift_id = 0 ) {
+        $rule_id = absint( $rule_id );
+        $desired_gift_id = absint( $desired_gift_id );
+        $out = array(
+            'keys'            => array(),
+            'matches_desired' => false,
+        );
+
+        if ( ! function_exists( 'WC' ) || ! WC()->cart ) {
+            return $out;
+        }
+
+        foreach ( WC()->cart->get_cart() as $cart_item_key => $cart_item ) {
+            if ( empty( $cart_item['mhfgfwc_gift'] ) || (int) $cart_item['mhfgfwc_gift'] !== $rule_id ) {
+                continue;
+            }
+            $out['keys'][] = $cart_item_key;
+
+            if ( $desired_gift_id ) {
+                $pid = isset( $cart_item['product_id'] ) ? (int) $cart_item['product_id'] : 0;
+                $vid = isset( $cart_item['variation_id'] ) ? (int) $cart_item['variation_id'] : 0;
+                if ( $desired_gift_id === $pid || $desired_gift_id === $vid ) {
+                    $out['matches_desired'] = true;
+                }
+            }
+        }
+
+        return $out;
+    }
+
+    /**
+     * Add a gift product to the cart with the correct meta flags.
+     * Mirrors the behavior of the AJAX add handler, but server-side.
+     *
+     * @param int $gift_product_id Gift product/variation ID.
+     * @param int $rule_id         Rule ID.
+     * @return bool True if added.
+     */
+    private function add_gift_to_cart( $gift_product_id, $rule_id ) {
+        $gift_product_id = absint( $gift_product_id );
+        $rule_id         = absint( $rule_id );
+
+        if ( ! $gift_product_id || ! $rule_id || ! function_exists( 'WC' ) || ! WC()->cart ) {
+            return false;
+        }
+
+        $product = wc_get_product( $gift_product_id );
+        if ( ! $product || 'publish' !== $product->get_status() ) {
+            return false;
+        }
+        if ( ! $product->is_in_stock() ) {
+            return false;
+        }
+
+        $uid = function_exists( 'wp_generate_uuid4' ) ? wp_generate_uuid4() : uniqid( 'gift_', true );
+        $gift_meta = array(
+            'mhfgfwc_gift'       => $rule_id,
+            'mhfgfwc_gift_uid'   => $uid,
+            'mhfgfwc_auto_added' => 1,
+        );
+
+        if ( $product instanceof WC_Product_Variation ) {
+            $cart_key = WC()->cart->add_to_cart(
+                $product->get_parent_id(),
+                1,
+                $gift_product_id,
+                $product->get_variation_attributes(),
+                $gift_meta
+            );
+        } else {
+            $cart_key = WC()->cart->add_to_cart(
+                $gift_product_id,
+                1,
+                0,
+                array(),
+                $gift_meta
+            );
+        }
+
+        return ! empty( $cart_key );
+    }
     
 	/**
 	 * Load active rules (cached in DB helper).
@@ -124,8 +315,8 @@ final class MHFGFWC_Engine {
 	 * @return void
 	 */
 	public function evaluate_cart( $cart ) {
-		// Do not run in wp-admin (except AJAX) to avoid overhead.
-		if ( ! did_action( 'woocommerce_init' ) ) {
+		// Don't hard-stop based on woocommerce_init timing; hooks can fire before it.
+        if ( ! function_exists( 'WC' ) || ! WC()->cart || ! WC()->session ) {
             return;
         }
 
@@ -397,6 +588,9 @@ final class MHFGFWC_Engine {
             return;
         }
 
+        // Avoid duplicate notices during Woo recalculation cascades.
+        static $notice_sent = array();
+
         foreach ( WC()->cart->get_cart() as $cart_item_key => $cart_item ) {
 
             // Gifts are tagged with mhfgfwc_gift = rule_id
@@ -408,9 +602,52 @@ final class MHFGFWC_Engine {
 
             // Rule no longer eligible → remove gift
             if ( empty( $eligible[ $rule_id ] ) ) {
+
+                $auto_add = $this->is_rule_auto_add_enabled( $rule_id );
+                if ( $auto_add && ( ! defined( 'DOING_AJAX' ) || ! DOING_AJAX ) ) {
+                    $pid  = isset( $cart_item['variation_id'] ) && (int) $cart_item['variation_id'] ? (int) $cart_item['variation_id'] : (int) ( $cart_item['product_id'] ?? 0 );
+                    $prod = $pid ? wc_get_product( $pid ) : null;
+                    $name = $prod ? $prod->get_name() : __( 'Free gift', 'mh-free-gifts-for-woocommerce' );
+
+                    $notice_key = 'auto_remove_' . $rule_id . '_' . $pid;
+                    if ( empty( $notice_sent[ $notice_key ] ) ) {
+                        wc_add_notice( sprintf( __( 'Free gift removed: %s', 'mh-free-gifts-for-woocommerce' ), $name ), 'notice' );
+                        $notice_sent[ $notice_key ] = true;
+                    }
+                }
+
                 WC()->cart->remove_cart_item( $cart_item_key );
             }
         }
+    }
+
+    /**
+     * Check if a rule has auto_add_gift enabled.
+     * We look in the cached rules loaded for the request.
+     *
+     * @param int $rule_id Rule ID.
+     * @return bool
+     */
+    private function is_rule_auto_add_enabled( $rule_id ) {
+        $rule_id = absint( $rule_id );
+        if ( $rule_id <= 0 ) {
+            return false;
+        }
+
+        foreach ( (array) $this->normalize_rules_array( $this->rules ) as $rule ) {
+            if ( is_object( $rule ) ) {
+                $rule = get_object_vars( $rule );
+            }
+            if ( ! is_array( $rule ) ) {
+                continue;
+            }
+            $id = $this->coerce_rule_id( $rule );
+            if ( $id === $rule_id ) {
+                return ! empty( $rule['auto_add_gift'] );
+            }
+        }
+
+        return false;
     }
 
 
@@ -523,35 +760,34 @@ final class MHFGFWC_Engine {
 	}*/
     
     private function get_cart_subtotal_for_rules( $cart ) {
-        $subtotal = 0.0;
+
+        $total = 0.0;
 
         foreach ( $cart->get_cart() as $item ) {
 
-            if ( empty( $item['data'] ) || empty( $item['quantity'] ) ) {
+            // Exclude all free gifts
+            if ( ! empty( $item['mhfgfwc_gift'] ) ) {
                 continue;
             }
 
-            // Exclude free gifts from threshold calculations
-            if ( ! empty( $item['mhfgfwc_rule_id'] ) ) {
-                continue;
-            }
+            // line_total = ex tax
+            // line_tax   = tax amount for this line
+            $line_total = isset( $item['line_total'] ) ? (float) $item['line_total'] : 0;
+            $line_tax   = isset( $item['line_tax'] )   ? (float) $item['line_tax']   : 0;
 
-            $product = $item['data'];
-
-            // WooCommerce-safe price (handles tax settings correctly)
-            $price = (float) wc_get_price_to_display( $product );
-
-            $subtotal += $price * (int) $item['quantity'];
+            $total += ( $line_total + $line_tax );
         }
 
         /**
-         * Filter the computed cart subtotal used by the gift engine.
+         * Filter the computed cart total used by the gift engine.
          *
-         * @param float    $subtotal
+         * @param float    $total
          * @param WC_Cart  $cart
          */
-        return (float) apply_filters( 'mhfgfwc_rules_subtotal', $subtotal, $cart );
+        return (float) apply_filters( 'mhfgfwc_rules_subtotal', $total, $cart );
     }
+
+
 
     public function handle_cart_item_removed( $cart_item_key, $cart ) {
 

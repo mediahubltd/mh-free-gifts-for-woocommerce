@@ -5,8 +5,8 @@ Description: Let customers choose a free gift when cart criteria are met (thresh
 Tags: free gifts for woocommerce, buy one get one, free gift, Gift Product Woocommerce, WooCommerce gift
 Requires at least: 6.0
 Tested up to: 6.8
-Stable tag: 1.0.11
-Version: 1.0.11
+Stable tag: 1.0.12
+Version: 1.0.12
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 Donate link: https://ko-fi.com/adk77
@@ -94,6 +94,12 @@ Yes! There’s no premium version or upsells. Everything is included for free.
 Support is provided via the WordPress.org forums or through the Mediahub support site.
 
 == Changelog ==
+
+= 1.0.12 (2026-02-08) =
+* [Added] Per-rule Auto Add Gift functionality with automatic gift swapping.
+* [Improved] Gift eligibility calculations to exclude free gifts and respect tax-inclusive totals.
+* [Improved] Gift grid layout when multiple rules are active.
+* [Fixed] Incorrect gift rule activation after adding a free gift in some scenarios.
 
 = 1.0.11 (2026-01-15) =
 * [Fixed] Improved rule date handling

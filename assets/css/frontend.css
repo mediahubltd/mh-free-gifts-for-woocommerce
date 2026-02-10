@@ -12,16 +12,30 @@
 }
 
 /* Responsive grid (cart/admin) */
-.mhfgfwc-gift-selector .mhfgfwc-grid{
+/*.mhfgfwc-gift-selector .mhfgfwc-grid{
   display:grid!important;
   grid-template-columns:repeat(var(--mhfgfwc-items-per-row,4),1fr)!important;
   gap:15px!important
+}*/
+.mhfgfwc-gift-selector .mhfgfwc-grid{
+  display:grid;
+  gap:15px;
 }
-.mhfgfwc-rule-group.mhfgfwc-cols-2 .mhfgfwc-grid{grid-template-columns:repeat(2,1fr)}
+
+/*.mhfgfwc-rule-group.mhfgfwc-cols-2 .mhfgfwc-grid{grid-template-columns:repeat(2,1fr)}
 .mhfgfwc-rule-group.mhfgfwc-cols-3 .mhfgfwc-grid{grid-template-columns:repeat(3,1fr)}
 .mhfgfwc-rule-group.mhfgfwc-cols-4 .mhfgfwc-grid{grid-template-columns:repeat(4,1fr)}
 .mhfgfwc-rule-group.mhfgfwc-cols-5 .mhfgfwc-grid{grid-template-columns:repeat(5,1fr)}
-.mhfgfwc-rule-group.mhfgfwc-cols-6 .mhfgfwc-grid{grid-template-columns:repeat(6,1fr)}
+.mhfgfwc-rule-group.mhfgfwc-cols-6 .mhfgfwc-grid{grid-template-columns:repeat(6,1fr)}*/
+
+/* Column control now applied at selector level (flattened layout) */
+.mhfgfwc-gift-selector.mhfgfwc-cols-1 .mhfgfwc-grid{grid-template-columns:repeat(1,1fr)}
+.mhfgfwc-gift-selector.mhfgfwc-cols-2 .mhfgfwc-grid{grid-template-columns:repeat(2,1fr)}
+.mhfgfwc-gift-selector.mhfgfwc-cols-3 .mhfgfwc-grid{grid-template-columns:repeat(3,1fr)}
+.mhfgfwc-gift-selector.mhfgfwc-cols-4 .mhfgfwc-grid{grid-template-columns:repeat(4,1fr)}
+.mhfgfwc-gift-selector.mhfgfwc-cols-5 .mhfgfwc-grid{grid-template-columns:repeat(5,1fr)}
+.mhfgfwc-gift-selector.mhfgfwc-cols-6 .mhfgfwc-grid{grid-template-columns:repeat(6,1fr)}
+
 
 /* Gift item card */
 .mhfgfwc-gift-item{

@@ -106,4 +106,58 @@ jQuery(function ($) {
     controlType:  'select',
     oneLine:      true
   });
+
+  /**
+   * Auto-add gift UI guardrails
+   * - Auto-add only works when exactly 1 gift is selected.
+   * - If auto-add is checked, enforce a single gift selection.
+   */
+  function syncAutoAddGiftUi() {
+    var $giftSelect = $('#mhfgfwc_gifts');
+    var $autoAdd    = $('#mhfgfwc_auto_add_gift');
+
+    if (!$giftSelect.length || !$autoAdd.length) return;
+
+    var selected = $giftSelect.val() || [];
+    if (!Array.isArray(selected)) {
+      selected = [selected];
+    }
+
+    // Disable auto-add if there isn't exactly one gift.
+    if (selected.length !== 1) {
+      $autoAdd.prop('checked', false).prop('disabled', true);
+    } else {
+      $autoAdd.prop('disabled', false);
+    }
+  }
+
+  // When gifts change, re-evaluate whether auto-add can be enabled.
+  $(document).on('change', '#mhfgfwc_gifts', function () {
+    syncAutoAddGiftUi();
+  });
+
+  // If user checks auto-add while multiple gifts are selected, keep only the first.
+  $(document).on('change', '#mhfgfwc_auto_add_gift', function () {
+    var $cb        = $(this);
+    var $giftSelect = $('#mhfgfwc_gifts');
+    if (!$cb.is(':checked') || !$giftSelect.length) {
+      syncAutoAddGiftUi();
+      return;
+    }
+
+    var selected = $giftSelect.val() || [];
+    if (!Array.isArray(selected)) {
+      selected = [selected];
+    }
+
+    if (selected.length > 1) {
+      // Keep the first selected gift to preserve intent.
+      $giftSelect.val([selected[0]]).trigger('change');
+    }
+
+    syncAutoAddGiftUi();
+  });
+
+  // Initial sync on page load.
+  syncAutoAddGiftUi();
 });

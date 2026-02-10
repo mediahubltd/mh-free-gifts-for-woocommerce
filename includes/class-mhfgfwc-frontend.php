@@ -273,55 +273,94 @@ final class MHFGFWC_Frontend {
 	 * - mhfgfwc_refresh_gifts AJAX (via mhfgfwc_render_gifts_section_inner)
 	 */
 	public function render_gifts_section_inner() {
-		$session_key = apply_filters( 'mhfgfwc_session_key', 'mhfgfwc_available_gifts' );
-		$available   = WC()->session->get( $session_key, array() );
-		if ( empty( $available ) || ! is_array( $available ) ) {
-			return;
-		}
+        $session_key = apply_filters( 'mhfgfwc_session_key', 'mhfgfwc_available_gifts' );
+        $available   = WC()->session->get( $session_key, array() );
 
-		$gift_cart = $this->map_gifts_in_cart();
+        if ( empty( $available ) || ! is_array( $available ) ) {
+            return;
+        }
 
-		foreach ( $available as $rule_id => $data ) {
-			$rule_id     = (int) $rule_id;
-			$max_allowed = isset( $data['allowed'] ) ? (int) $data['allowed'] : 0;
-			$have        = isset( $gift_cart[ $rule_id ] ) ? count( $gift_cart[ $rule_id ] ) : 0;
-			$disabled    = ( $max_allowed > 0 && $have >= $max_allowed );
-			$rule_class  = $disabled ? ' mhfgfwc-disabled-rule' : '';
+        $gift_cart = $this->map_gifts_in_cart();
 
-			$items_per_row = isset( $data['rule']['items_per_row'] ) ? (int) $data['rule']['items_per_row'] : 4;
-			$cols_class    = ' mhfgfwc-cols-' . max( 1, min( 6, $items_per_row ) );
+        /**
+         * Determine max columns across all visible rules.
+         * This preserves existing items_per_row behaviour
+         * but applies it once at grid level.
+         */
+        $max_cols = 1;
+        foreach ( $available as $data ) {
+            if ( ! empty( $data['rule']['items_per_row'] ) ) {
+                $max_cols = max(
+                    $max_cols,
+                    (int) $data['rule']['items_per_row']
+                );
+            }
+        }
+        $max_cols   = max( 1, min( 6, $max_cols ) );
+        $cols_class = ' mhfgfwc-cols-' . $max_cols;
 
-			echo '<div class="mhfgfwc-rule-group' . esc_attr( $rule_class . $cols_class ) . '" data-rule="' . esc_attr( $rule_id ) . '">';
+        // 🔹 ONE shared grid wrapper
+        echo '<div class="mhfgfwc-gift-selector' . esc_attr( $cols_class ) . '">';
+        echo '<div class="mhfgfwc-grid">';
 
-			$raw_gifts = isset( $data['rule']['gifts'] ) ? $data['rule']['gifts'] : array();
-			$gifts     = array_filter( (array) maybe_unserialize( $raw_gifts ), 'is_numeric' );
+        foreach ( $available as $rule_id => $data ) {
 
-			echo '<div class="mhfgfwc-grid">';
+            $rule_id     = (int) $rule_id;
+            $max_allowed = isset( $data['allowed'] ) ? (int) $data['allowed'] : 0;
+            $have        = isset( $gift_cart[ $rule_id ] ) ? count( $gift_cart[ $rule_id ] ) : 0;
+            $disabled    = ( $max_allowed > 0 && $have >= $max_allowed );
+            $rule_class  = $disabled ? ' mhfgfwc-disabled-rule' : '';
 
-			foreach ( $gifts as $prod_id ) {
-				$prod_id = (int) $prod_id;
-				$product = wc_get_product( $prod_id );
-				if ( ! $product || 'publish' !== $product->get_status() ) {
-					continue;
-				}
+            $raw_gifts = isset( $data['rule']['gifts'] ) ? $data['rule']['gifts'] : array();
+            $gifts     = array_filter( (array) maybe_unserialize( $raw_gifts ), 'is_numeric' );
 
-				echo '<div class="mhfgfwc-gift-item">';
-				echo   '<div class="mhfgfwc-thumb">' . wp_kses_post( $product->get_image( 'woocommerce_thumbnail' ) ) . '</div>';
-				echo   '<div class="mhfgfwc-title">' . esc_html( $product->get_name() ) . '</div>';
+            foreach ( $gifts as $prod_id ) {
 
-				if ( isset( $gift_cart[ $rule_id ][ $prod_id ] ) ) {
-					$item_key = (string) $gift_cart[ $rule_id ][ $prod_id ];
-					echo '<a href="#" class="mhfgfwc-remove-gift" data-item-key="' . esc_attr( $item_key ) . '">' . esc_html__( 'Remove Gift', 'mh-free-gifts-for-woocommerce' ) . '</a>';
-				} elseif ( ! $disabled ) {
-					echo '<a href="#" class="mhfgfwc-add-gift" data-rule="' . esc_attr( $rule_id ) . '" data-product="' . esc_attr( $prod_id ) . '">' . esc_html__( 'Add Gift', 'mh-free-gifts-for-woocommerce' ) . '</a>';
-				}
+                $prod_id = (int) $prod_id;
+                $product = wc_get_product( $prod_id );
 
-				echo '</div>'; // .mhfgfwc-gift-item
-			}
+                if ( ! $product || 'publish' !== $product->get_status() ) {
+                    continue;
+                }
 
-			echo '</div></div>'; // .mhfgfwc-grid, .mhfgfwc-rule-group
-		}
-	}
+                echo '<div class="mhfgfwc-gift-item' . esc_attr( $rule_class ) . '" data-rule="' . esc_attr( $rule_id ) . '">';
+
+                echo '<div class="mhfgfwc-thumb">' .
+                        wp_kses_post( $product->get_image( 'woocommerce_thumbnail' ) ) .
+                     '</div>';
+
+                echo '<div class="mhfgfwc-title">' .
+                        esc_html( $product->get_name() ) .
+                     '</div>';
+
+                if ( isset( $gift_cart[ $rule_id ][ $prod_id ] ) ) {
+
+                    $item_key = (string) $gift_cart[ $rule_id ][ $prod_id ];
+
+                    echo '<a href="#" class="mhfgfwc-remove-gift" data-item-key="' .
+                            esc_attr( $item_key ) .
+                         '">' .
+                            esc_html__( 'Remove Gift', 'mh-free-gifts-for-woocommerce' ) .
+                         '</a>';
+
+                } elseif ( ! $disabled ) {
+
+                    echo '<a href="#" class="mhfgfwc-add-gift" data-rule="' .
+                            esc_attr( $rule_id ) .
+                            '" data-product="' .
+                            esc_attr( $prod_id ) .
+                         '">' .
+                            esc_html__( 'Add Gift', 'mh-free-gifts-for-woocommerce' ) .
+                         '</a>';
+                }
+
+                echo '</div>'; // .mhfgfwc-gift-item
+            }
+        }
+
+        echo '</div></div>'; // .mhfgfwc-grid, .mhfgfwc-gift-selector
+    }
+
 
 	/**
 	 * Render “Choose Your Free Gift” as a coupon-style toggle on checkout
