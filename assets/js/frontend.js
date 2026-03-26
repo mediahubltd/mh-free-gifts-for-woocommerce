@@ -34,27 +34,62 @@ jQuery(function ($) {
         .text(label || orig || $btn.text());
   }
 
+  function ensureToggleIcon($toggle) {
+    var $icon = $toggle.find('.mhfgfwc-toggle-icon');
+
+    if (!$icon.length) {
+      $icon = $('<span class="mhfgfwc-toggle-icon dashicons dashicons-arrow-down-alt2"></span>');
+      $toggle.append($icon);
+    }
+
+    return $icon;
+  }
+
+  function applyToggleState($wrap, isOpen) {
+    var $toggle = $wrap.find('.mhfgfwc-show-gifts-toggle');
+    var $panel = $wrap.next('.mhfgfwc-gift-section');
+    var $icon = ensureToggleIcon($toggle);
+
+    if (!$panel.length) {
+      return;
+    }
+
+    if (isOpen) {
+      $panel.show().removeClass('mhfgfwc-hidden');
+      $wrap.addClass('open');
+      $toggle.addClass('opened');
+      $icon.removeClass('dashicons-arrow-down-alt2')
+           .addClass('dashicons-arrow-up-alt2');
+      return;
+    }
+
+    $panel.hide().addClass('mhfgfwc-hidden');
+    $wrap.removeClass('open');
+    $toggle.removeClass('opened');
+    $icon.removeClass('dashicons-arrow-up-alt2')
+         .addClass('dashicons-arrow-down-alt2');
+  }
+
   /* -----------------------------------------------------------
    * Toggle UI
    * ----------------------------------------------------------- */
   function initToggleBehaviour(context) {
-    const $root = context ? $(context) : $(document);
+    const $context = context ? $(context) : $(document);
+    const $wraps = $context.filter('.woocommerce-form-coupon-toggle')
+      .add($context.find('.woocommerce-form-coupon-toggle'));
 
-    $root.find('.woocommerce-form-coupon-toggle').each(function () {
+    $wraps.each(function () {
       var $wrap = $(this);
       var $toggle = $wrap.find('.mhfgfwc-show-gifts-toggle');
-      var $icon = $toggle.find('.mhfgfwc-toggle-icon');
       var $panel = $wrap.next('.mhfgfwc-gift-section');
 
-      if (!$icon.length) {
-        $icon = $('<span class="mhfgfwc-toggle-icon dashicons dashicons-arrow-down-alt2"></span>');
-        $toggle.append($icon);
+      ensureToggleIcon($toggle);
+
+      if ($panel.length) {
+        applyToggleState($wrap, false);
       }
 
-      if ($panel.length && !$wrap.hasClass('mhfgfwc-init')) {
-        $panel.hide();
-        $wrap.removeClass('open');
-        $toggle.removeClass('opened');
+      if (!$wrap.hasClass('mhfgfwc-init')) {
         $wrap.addClass('mhfgfwc-init');
       }
     });
@@ -68,20 +103,24 @@ jQuery(function ($) {
     var $link = $(this);
     var $wrap = $link.closest('.woocommerce-form-coupon-toggle');
     var $panel = $wrap.next('.mhfgfwc-gift-section');
-    var $icon = $link.find('.mhfgfwc-toggle-icon');
+    var willOpen = !$link.hasClass('opened');
 
     if (!$panel.length) return;
 
-    $panel.stop(true, true).slideToggle(200);
-    $wrap.toggleClass('open');
-    $link.toggleClass('opened');
-
-    if ($link.hasClass('opened')) {
-      $icon.removeClass('dashicons-arrow-down-alt2')
-           .addClass('dashicons-arrow-up-alt2');
+    if (willOpen) {
+      $panel.stop(true, true)
+        .removeClass('mhfgfwc-hidden')
+        .slideDown(200);
+      applyToggleState($wrap, true);
     } else {
-      $icon.removeClass('dashicons-arrow-up-alt2')
-           .addClass('dashicons-arrow-down-alt2');
+      $panel.stop(true, true).slideUp(200, function () {
+        $panel.addClass('mhfgfwc-hidden');
+      });
+      $wrap.removeClass('open');
+      $link.removeClass('opened');
+      ensureToggleIcon($link)
+        .removeClass('dashicons-arrow-up-alt2')
+        .addClass('dashicons-arrow-down-alt2');
     }
   });
 
@@ -169,29 +208,54 @@ jQuery(function ($) {
       type: 'POST',
       url: mhfgfwcFrontend.ajax_url_refresh,
       data: {
-        nonce: mhfgfwcFrontend.nonce
+        nonce: mhfgfwcFrontend.nonce,
+        context: $('form.woocommerce-checkout').length ? 'checkout' : 'cart'
       },
       success: function (res) {
-        if (res && res.success && res.data && res.data.html) {
+        if (res && res.success && res.data && typeof res.data.html !== 'undefined') {
+          var html = $.trim(res.data.html);
+          var $toggleWrap = $section.prev('.woocommerce-form-coupon-toggle');
+          var wasOpen = $toggleWrap.hasClass('open') ||
+            $toggleWrap.find('.mhfgfwc-show-gifts-toggle').hasClass('opened') ||
+            $section.is(':visible');
 
-          // Keep wrapper, replace inner content only
-          $section.fadeTo(120, 0.3, function () {
+          if (!html) {
+            $section.empty().hide();
+            $section.addClass('mhfgfwc-hidden');
+            applyToggleState($toggleWrap, false);
+            $toggleWrap.hide();
+            return;
+          }
 
-            $section.html(res.data.html);
+          $toggleWrap.show();
+
+          function refreshGiftSection() {
+            $section.html(html);
 
             // Remove greyed-out class if any
-            $section.removeClass('mhfgfwc-disabled-rule');
+            $section.removeClass('mhfgfwc-disabled-rule').css('opacity', 1);
 
             // Re-initialise toggle UI + button bindings
-            initToggleBehaviour($section);
+            initToggleBehaviour($toggleWrap);
+            applyToggleState($toggleWrap, wasOpen);
 
             // If you have a global event binder, call it
             if (typeof window.mhfgfwcBindGiftEvents === 'function') {
               window.mhfgfwcBindGiftEvents($section[0]);
             }
+          }
 
-            $section.fadeTo(120, 1);
-          });
+          // Only animate if the panel is already open; fadeTo() would
+          // otherwise reveal a collapsed section before we re-sync it.
+          if (wasOpen) {
+            $section.stop(true, true).fadeTo(120, 0.3, function () {
+              refreshGiftSection();
+              $section.fadeTo(120, 1);
+            });
+            return;
+          }
+
+          refreshGiftSection();
         }
       }
     });

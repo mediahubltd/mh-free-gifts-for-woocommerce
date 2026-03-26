@@ -114,9 +114,25 @@
 .wc-block-checkout__review-order .wc-block-cart-item:has(.mhfgfwc-badge) .wc-block-components-quantity-selector{
   display:none!important
 }
+.mhfgfwc-is-gift .wc-block-cart-item__total .wc-block-components-product-price,
+.mhfgfwc-is-gift .wc-block-cart-item__prices .wc-block-components-product-price,
+.mhfgfwc-is-gift .wc-block-components-product-metadata__value{
+  display:none!important
+}
 /* Compact "× 1" label (used by our JS) */
 .mhfgfwc-fixed-qty{
   display:inline-block;font-size:.9em;opacity:.75;margin-left:.35rem
+}
+
+.mhfgfwc-badge{
+  display:block;
+  margin-top:4px;
+  font-weight:700;
+  font-style:italic;
+}
+.mhfgfwc-block-badge{
+  font-size:.9em;
+  opacity:.85;
 }
 
 /* Mount container from blocks.js */
@@ -163,4 +179,3 @@
   opacity: 0.6;
   pointer-events: none;
 }
-

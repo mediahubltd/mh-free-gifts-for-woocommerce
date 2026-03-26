@@ -350,6 +350,7 @@ class MHFGFWC_Admin {
 
         $gifts     = $rule ? maybe_unserialize( $rule->gifts ) : [];
         $auto_add  = $rule ? (int) ( $rule->auto_add_gift ?? 0 ) : 0;
+        $gift_quantity_multiplier = $rule ? (int) ( $rule->gift_quantity_multiplier ?? 0 ) : 0;
         $prod_deps = $rule ? maybe_unserialize( $rule->product_dependency ) : [];
         $user_deps = $rule ? maybe_unserialize( $rule->user_dependency ) : [];
         $cat_deps = $rule ? maybe_unserialize( $rule->category_dependency ) : [];
@@ -402,7 +403,7 @@ class MHFGFWC_Admin {
                         <td>
                             <label>
                                 <input type="checkbox" name="auto_add_gift" id="mhfgfwc_auto_add_gift" value="1" <?php checked( $auto_add, 1 ); ?> <?php disabled( count( (array) $gifts ) !== 1, true ); ?>>
-                                <?php esc_html_e( 'Automatically add the free gift to the cart when this rule is met (requires exactly 1 gift selected).', 'mh-free-gifts-for-woocommerce' ); ?>
+                                <?php esc_html_e( 'Automatically add the free gift to the cart when this rule is met (requires exactly 1 gift selected, hides it from the manual selector, and uses a base quantity of 1).', 'mh-free-gifts-for-woocommerce' ); ?>
                             </label>
                         </td>
                     </tr>
@@ -494,7 +495,12 @@ class MHFGFWC_Admin {
                     </tr>
                     <tr>
                         <th><label for="mhfgfwc_gift_quantity"><?php esc_html_e( 'Number of Gifts Allowed', 'mh-free-gifts-for-woocommerce' ); ?></label></th>
-                        <td><input name="gift_quantity" id="mhfgfwc_gift_quantity" type="number" min="1" value="<?php echo esc_attr( $rule->gift_quantity ?? 1 ); ?>" class="small-text"></td>
+                        <td>
+                            <input name="gift_quantity" id="mhfgfwc_gift_quantity" type="number" min="1" value="<?php echo esc_attr( $rule->gift_quantity ?? 1 ); ?>" class="small-text">
+                            <p class="description">
+                                <?php esc_html_e( 'Auto-add rules use a base quantity of 1, but can still scale with Repeat Gifts For Quantity Multiples.', 'mh-free-gifts-for-woocommerce' ); ?>
+                            </p>
+                        </td>
                     </tr>
                     <tr>
                         <th><label for="mhfgfwc_disable_with_coupon"><?php esc_html_e( 'Disable if Coupon Applied', 'mh-free-gifts-for-woocommerce' ); ?></label></th>
@@ -544,6 +550,18 @@ class MHFGFWC_Admin {
                                 endforeach; ?>
                             </select>
                             <input name="qty_amount" type="number" min="1" value="<?php echo esc_attr( $rule->qty_amount ?? '' ); ?>" placeholder="<?php esc_attr_e( 'Qty', 'mh-free-gifts-for-woocommerce' ); ?>" class="small-text">
+                        </td>
+                    </tr>
+                    <tr>
+                        <th><label for="mhfgfwc_gift_quantity_multiplier"><?php esc_html_e( 'Repeat Gifts For Quantity Multiples', 'mh-free-gifts-for-woocommerce' ); ?></label></th>
+                        <td>
+                            <label>
+                                <input type="checkbox" name="gift_quantity_multiplier" id="mhfgfwc_gift_quantity_multiplier" value="1" <?php checked( $gift_quantity_multiplier, 1 ); ?>>
+                                <?php esc_html_e( 'Multiply the Number of Gifts Allowed for each qualifying Cart Quantity multiple.', 'mh-free-gifts-for-woocommerce' ); ?>
+                            </label>
+                            <p class="description">
+                                <?php esc_html_e( 'Example: Cart Quantity >= 2 and Number of Gifts Allowed = 1 gives 1 gift at 2 items, 2 gifts at 4 items, and 3 gifts at 6 items. Works with Cart Quantity >= and > rules, including auto-add rules with exactly one configured gift product.', 'mh-free-gifts-for-woocommerce' ); ?>
+                            </p>
                         </td>
                     </tr>
                     <tr>
@@ -639,8 +657,9 @@ class MHFGFWC_Admin {
         $limit_per_rule = ( isset( $post['limit_per_rule'] ) && $post['limit_per_rule'] !== '' ) ? (int) $post['limit_per_rule'] : null;
         $limit_per_user = ( isset( $post['limit_per_user'] ) && $post['limit_per_user'] !== '' ) ? (int) $post['limit_per_user'] : null;
 
-        $gifts = isset( $post['gifts'] ) ? array_map( 'intval', (array) $post['gifts'] ) : [];
-        $gift_quantity = isset( $post['gift_quantity'] ) ? (int) $post['gift_quantity'] : 1;
+        $gifts = isset( $post['gifts'] ) ? array_values( array_filter( array_map( 'intval', (array) $post['gifts'] ) ) ) : [];
+        $gift_quantity = isset( $post['gift_quantity'] ) ? max( 1, (int) $post['gift_quantity'] ) : 1;
+        $gift_quantity_multiplier = ! empty( $post['gift_quantity_multiplier'] ) ? 1 : 0;
 
         // Auto-add gift: only valid when exactly one gift product is selected.
         $auto_add_gift = ! empty( $post['auto_add_gift'] ) ? 1 : 0;
@@ -650,6 +669,9 @@ class MHFGFWC_Admin {
         // If auto-add is enabled, enforce a single gift ID (first selected).
         if ( $auto_add_gift && count( (array) $gifts ) > 1 ) {
             $gifts = array_values( array_slice( (array) $gifts, 0, 1 ) );
+        }
+        if ( $auto_add_gift ) {
+            $gift_quantity = 1;
         }
 
         $product_dependency = isset( $post['product_dependency'] ) ? array_map( 'intval', (array) $post['product_dependency'] ) : [];
@@ -683,6 +705,7 @@ class MHFGFWC_Admin {
             'limit_per_user'      => $limit_per_user,
             'gifts'               => maybe_serialize( $gifts ),
             'gift_quantity'       => $gift_quantity,
+            'gift_quantity_multiplier' => $gift_quantity_multiplier,
             'auto_add_gift'       => $auto_add_gift,
             'product_dependency'  => maybe_serialize( $product_dependency ),
             'user_dependency'     => maybe_serialize( $user_dependency ),
@@ -713,6 +736,9 @@ class MHFGFWC_Admin {
         if ( class_exists( 'MHFGFWC_DB' ) && method_exists( 'MHFGFWC_DB', 'bust_rules_cache' ) ) {
             MHFGFWC_DB::bust_rules_cache();
         }
+
+        // Bump a “rules revision” so cart/checkout sessions rebuild immediately.
+        update_option( 'mhfgfwc_rules_rev', time() );
         
         wp_cache_delete( 'mhfgfwc_admin_rule_' . $rule_id, 'mhfgfwc' );   // ← clear rule form cache
         wp_cache_delete( 'mhfgfwc_admin_rules_list_v1', 'mhfgfwc' );       // ← clear list cache
@@ -752,6 +778,9 @@ class MHFGFWC_Admin {
         if ( class_exists( 'MHFGFWC_DB' ) && method_exists( 'MHFGFWC_DB', 'bust_rules_cache' ) ) {
             MHFGFWC_DB::bust_rules_cache();
         }
+
+        // Bump a “rules revision” so cart/checkout sessions rebuild immediately.
+        update_option( 'mhfgfwc_rules_rev', time() );
 
         // Bust admin-page caches (do this regardless of the branch above)
         wp_cache_delete( 'mhfgfwc_admin_rule_' . (int) $rule_id, 'mhfgfwc' ); // edit form cache
@@ -920,6 +949,35 @@ class MHFGFWC_Admin {
     public function register_settings() {
         register_setting(
             'mhfgfwc_settings',
+            'mhfgfwc_general_settings',
+            [
+                'type'              => 'array',
+                'sanitize_callback' => [ $this, 'sanitize_general_settings' ],
+                'default'           => [
+                    'allow_accumulation' => 1,
+                ],
+            ]
+        );
+
+        add_settings_section(
+            'mhfgfwc_rules_section',
+            __( 'Gift Rules', 'mh-free-gifts-for-woocommerce' ),
+            function () {
+                echo '<p>' . esc_html__( 'Control how multiple eligible gift rules behave in the same cart.', 'mh-free-gifts-for-woocommerce' ) . '</p>';
+            },
+            'mhfgfwc_settings'
+        );
+
+        add_settings_field(
+            'mhfgfwc_allow_accumulation',
+            __( 'Allow Gift Accumulation', 'mh-free-gifts-for-woocommerce' ),
+            [ $this, 'field_allow_accumulation' ],
+            'mhfgfwc_settings',
+            'mhfgfwc_rules_section'
+        );
+
+        register_setting(
+            'mhfgfwc_settings',
             'mhfgfwc_button_styles',
             [
                 'type'              => 'array',
@@ -929,9 +987,85 @@ class MHFGFWC_Admin {
                     'bg_color'     => '#0071a1',
                     'border_color' => '#0071a1',
                     'border_size'  => 2,
+                    'font_size'    => 15,
                     'radius'       => 25,
                 ],
             ]
+        );
+
+        register_setting(
+            'mhfgfwc_settings',
+            'mhfgfwc_display_settings',
+            [
+                'type'              => 'array',
+                'sanitize_callback' => [ $this, 'sanitize_display_settings' ],
+                'default'           => $this->get_display_settings_defaults(),
+            ]
+        );
+
+        add_settings_section(
+            'mhfgfwc_display_section',
+            __( 'Checkout Placement & Text', 'mh-free-gifts-for-woocommerce' ),
+            function () {
+                echo '<p>' . esc_html__( 'Control the checkout hook location and customize the main frontend labels shown to customers.', 'mh-free-gifts-for-woocommerce' ) . '</p>';
+            },
+            'mhfgfwc_settings'
+        );
+
+        add_settings_field(
+            'mhfgfwc_checkout_hook',
+            __( 'Checkout Placement', 'mh-free-gifts-for-woocommerce' ),
+            [ $this, 'field_checkout_hook' ],
+            'mhfgfwc_settings',
+            'mhfgfwc_display_section'
+        );
+
+        add_settings_field(
+            'mhfgfwc_cart_heading_text',
+            __( 'Cart Heading Text', 'mh-free-gifts-for-woocommerce' ),
+            [ $this, 'field_cart_heading_text' ],
+            'mhfgfwc_settings',
+            'mhfgfwc_display_section'
+        );
+
+        add_settings_field(
+            'mhfgfwc_checkout_toggle_text',
+            __( 'Checkout Toggle Text', 'mh-free-gifts-for-woocommerce' ),
+            [ $this, 'field_checkout_toggle_text' ],
+            'mhfgfwc_settings',
+            'mhfgfwc_display_section'
+        );
+
+        add_settings_field(
+            'mhfgfwc_add_button_text',
+            __( 'Add Button Text', 'mh-free-gifts-for-woocommerce' ),
+            [ $this, 'field_add_button_text' ],
+            'mhfgfwc_settings',
+            'mhfgfwc_display_section'
+        );
+
+        add_settings_field(
+            'mhfgfwc_remove_button_text',
+            __( 'Remove Button Text', 'mh-free-gifts-for-woocommerce' ),
+            [ $this, 'field_remove_button_text' ],
+            'mhfgfwc_settings',
+            'mhfgfwc_display_section'
+        );
+
+        add_settings_field(
+            'mhfgfwc_cart_heading_font_size',
+            __( 'Cart Heading Font Size (px)', 'mh-free-gifts-for-woocommerce' ),
+            [ $this, 'field_cart_heading_font_size' ],
+            'mhfgfwc_settings',
+            'mhfgfwc_display_section'
+        );
+
+        add_settings_field(
+            'mhfgfwc_checkout_toggle_font_size',
+            __( 'Checkout Toggle Font Size (px)', 'mh-free-gifts-for-woocommerce' ),
+            [ $this, 'field_checkout_toggle_font_size' ],
+            'mhfgfwc_settings',
+            'mhfgfwc_display_section'
         );
 
         add_settings_section(
@@ -976,12 +1110,54 @@ class MHFGFWC_Admin {
         );
 
         add_settings_field(
+            'mhfgfwc_button_font_size',
+            __( 'Button Font Size (px)', 'mh-free-gifts-for-woocommerce' ),
+            [ $this, 'field_button_font_size' ],
+            'mhfgfwc_settings',
+            'mhfgfwc_buttons_section'
+        );
+
+        add_settings_field(
             'mhfgfwc_radius',
             __( 'Border Radius (px)', 'mh-free-gifts-for-woocommerce' ),
             [ $this, 'field_radius' ],
             'mhfgfwc_settings',
             'mhfgfwc_buttons_section'
         );
+    }
+
+    public function sanitize_general_settings( $input ) {
+        return [
+            'allow_accumulation' => ! empty( $input['allow_accumulation'] ) ? 1 : 0,
+        ];
+    }
+
+    public function sanitize_display_settings( $input ) {
+        $defaults = $this->get_display_settings_defaults();
+        $allowed_hooks = array_keys( $this->get_checkout_hook_options() );
+
+        $checkout_hook = isset( $input['checkout_hook'] ) ? sanitize_key( $input['checkout_hook'] ) : $defaults['checkout_hook'];
+        if ( ! in_array( $checkout_hook, $allowed_hooks, true ) ) {
+            $checkout_hook = $defaults['checkout_hook'];
+        }
+
+        $out = [
+            'checkout_hook'             => $checkout_hook,
+            'cart_heading_text'         => isset( $input['cart_heading_text'] ) ? sanitize_text_field( $input['cart_heading_text'] ) : $defaults['cart_heading_text'],
+            'checkout_toggle_text'      => isset( $input['checkout_toggle_text'] ) ? sanitize_text_field( $input['checkout_toggle_text'] ) : $defaults['checkout_toggle_text'],
+            'add_button_text'           => isset( $input['add_button_text'] ) ? sanitize_text_field( $input['add_button_text'] ) : $defaults['add_button_text'],
+            'remove_button_text'        => isset( $input['remove_button_text'] ) ? sanitize_text_field( $input['remove_button_text'] ) : $defaults['remove_button_text'],
+            'cart_heading_font_size'    => isset( $input['cart_heading_font_size'] ) ? max( 10, min( 48, absint( $input['cart_heading_font_size'] ) ) ) : $defaults['cart_heading_font_size'],
+            'checkout_toggle_font_size' => isset( $input['checkout_toggle_font_size'] ) ? max( 10, min( 48, absint( $input['checkout_toggle_font_size'] ) ) ) : $defaults['checkout_toggle_font_size'],
+        ];
+
+        foreach ( [ 'cart_heading_text', 'checkout_toggle_text', 'add_button_text', 'remove_button_text' ] as $key ) {
+            if ( '' === trim( (string) $out[ $key ] ) ) {
+                $out[ $key ] = $defaults[ $key ];
+            }
+        }
+
+        return $out;
     }
 
     public function sanitize_button_styles( $input ) {
@@ -992,6 +1168,7 @@ class MHFGFWC_Admin {
         $out['border_color'] = isset( $input['border_color'] ) ? sanitize_hex_color( $input['border_color'] ) : '#0071a1';
 
         $out['border_size']  = isset( $input['border_size'] ) ? max( 0, min( 12, absint( $input['border_size'] ) ) ) : 2;
+        $out['font_size']    = isset( $input['font_size'] )   ? max( 10, min( 32, absint( $input['font_size'] ) ) ) : 15;
         $out['radius']       = isset( $input['radius'] )      ? max( 0, min( 50,  absint( $input['radius'] ) ) )      : 25;
 
         // Fallback for any invalid hex colors
@@ -1040,32 +1217,39 @@ class MHFGFWC_Admin {
         }
 
         $o = $this->get_button_styles();
+        $d = $this->get_display_settings();
 
         echo '<div class="wrap">';
         echo '<h1>' . esc_html__( 'Free Gifts Settings', 'mh-free-gifts-for-woocommerce' ) . '</h1>';
 
         // Live preview (reflects current inputs before save via JS)
         $style_attr = sprintf(
-            'color:%1$s;background:%2$s;border:%3$dpx solid %4$s;border-radius:%5$dpx;',
+            'color:%1$s;background:%2$s;border:%3$dpx solid %4$s;border-radius:%5$dpx;font-size:%6$dpx;',
             esc_attr( $o['text_color'] ),
             esc_attr( $o['bg_color'] ),
             (int) $o['border_size'],
             esc_attr( $o['border_color'] ),
-            (int) $o['radius']
+            (int) $o['radius'],
+            (int) $o['font_size']
         );
 
-        echo '<hr style="margin:24px 0;">';
-        echo '<h2>' . esc_html__( 'Live Preview', 'mh-free-gifts-for-woocommerce' ) . '</h2>';
-        echo '<p class="description">' . esc_html__( 'This is how your buttons will look on the frontend.', 'mh-free-gifts-for-woocommerce' ) . '</p>';
-
-        echo '<div id="mhfgfwc-preview" style="display:flex;gap:12px;align-items:center;">';
-        echo '  <a href="#" class="button mhfgfwc-preview-btn" style="' . esc_attr( $style_attr ) . '">' . esc_html__( 'Add Gift', 'mh-free-gifts-for-woocommerce' ) . '</a>';
-        echo '  <a href="#" class="button mhfgfwc-preview-btn" style="' . esc_attr( $style_attr ) . '">' . esc_html__( 'Remove Gift', 'mh-free-gifts-for-woocommerce' ) . '</a>';
-        echo '</div>';
-        
         echo '<form action="' . esc_url( admin_url( 'options.php' ) ) . '" method="post">';
         settings_fields( 'mhfgfwc_settings' );
         do_settings_sections( 'mhfgfwc_settings' );
+
+        echo '<hr style="margin:24px 0;">';
+        echo '<h2>' . esc_html__( 'Live Preview', 'mh-free-gifts-for-woocommerce' ) . '</h2>';
+        echo '<p class="description">' . esc_html__( 'This is how your main gift labels and buttons will look on the frontend.', 'mh-free-gifts-for-woocommerce' ) . '</p>';
+
+        echo '<div id="mhfgfwc-preview" style="display:grid;gap:14px;max-width:420px;">';
+        echo '  <div class="mhfgfwc-preview-toggle" style="font-size:' . esc_attr( (int) $d['checkout_toggle_font_size'] ) . 'px;font-weight:500;">' . esc_html( $d['checkout_toggle_text'] ) . '</div>';
+        echo '  <div class="mhfgfwc-preview-heading" style="font-size:' . esc_attr( (int) $d['cart_heading_font_size'] ) . 'px;font-weight:700;text-transform:uppercase;background:#f5f5f5;padding:10px;border-radius:4px;text-align:center;">' . esc_html( $d['cart_heading_text'] ) . '</div>';
+        echo '  <div style="display:flex;gap:12px;align-items:center;">';
+        echo '    <a href="#" class="button mhfgfwc-preview-btn mhfgfwc-preview-btn--add" style="' . esc_attr( $style_attr ) . '">' . esc_html( $d['add_button_text'] ) . '</a>';
+        echo '    <a href="#" class="button mhfgfwc-preview-btn mhfgfwc-preview-btn--remove" style="' . esc_attr( $style_attr ) . '">' . esc_html( $d['remove_button_text'] ) . '</a>';
+        echo '  </div>';
+        echo '</div>';
+
         submit_button();
         echo '</form>';
 
@@ -1093,9 +1277,133 @@ class MHFGFWC_Admin {
             'bg_color'     => '#000000',
             'border_color' => '#000000',
             'border_size'  => 2,
+            'font_size'    => 15,
             'radius'       => 25,
         ];
         return wp_parse_args( is_array( $opt ) ? $opt : [], $def );
+    }
+
+    private function get_display_settings_defaults() {
+        return [
+            'checkout_hook'             => 'woocommerce_checkout_before_order_review',
+            'cart_heading_text'         => __( 'Choose Your Free Gift', 'mh-free-gifts-for-woocommerce' ),
+            'checkout_toggle_text'      => __( 'Free Gift', 'mh-free-gifts-for-woocommerce' ),
+            'add_button_text'           => __( 'Add Gift', 'mh-free-gifts-for-woocommerce' ),
+            'remove_button_text'        => __( 'Remove Gift', 'mh-free-gifts-for-woocommerce' ),
+            'cart_heading_font_size'    => 15,
+            'checkout_toggle_font_size' => 18,
+        ];
+    }
+
+    private function get_display_settings() {
+        $opt = get_option( 'mhfgfwc_display_settings', [] );
+        return wp_parse_args( is_array( $opt ) ? $opt : [], $this->get_display_settings_defaults() );
+    }
+
+    private function get_checkout_hook_options() {
+        return [
+            'woocommerce_before_checkout_form'            => __( 'Before Checkout Form', 'mh-free-gifts-for-woocommerce' ),
+            'woocommerce_checkout_before_customer_details'=> __( 'Before Customer Details', 'mh-free-gifts-for-woocommerce' ),
+            'woocommerce_checkout_before_order_review'    => __( 'Before Order Review', 'mh-free-gifts-for-woocommerce' ),
+            'woocommerce_checkout_after_order_review'     => __( 'After Order Review', 'mh-free-gifts-for-woocommerce' ),
+        ];
+    }
+
+    private function get_general_settings() {
+        $opt = get_option( 'mhfgfwc_general_settings', [] );
+        $def = [
+            'allow_accumulation' => 1,
+        ];
+        return wp_parse_args( is_array( $opt ) ? $opt : [], $def );
+    }
+
+    public function field_allow_accumulation() {
+        $o = $this->get_general_settings();
+        printf(
+            '<label><input type="checkbox" id="mhfgfwc_allow_accumulation" name="mhfgfwc_general_settings[allow_accumulation]" value="1" %1$s /> %2$s</label>',
+            checked( ! empty( $o['allow_accumulation'] ), true, false ),
+            esc_html__( 'Allow customers to combine gifts from multiple eligible rules in the same order.', 'mh-free-gifts-for-woocommerce' )
+        );
+        echo '<p class="description">' .
+            esc_html__( 'Disable this to let customers keep gifts from only one eligible rule at a time. Higher per-rule gift allowances still work within the selected rule.', 'mh-free-gifts-for-woocommerce' ) .
+        '</p>';
+    }
+
+    public function field_checkout_hook() {
+        $o = $this->get_display_settings();
+        echo '<select id="mhfgfwc_checkout_hook" name="mhfgfwc_display_settings[checkout_hook]">';
+        foreach ( $this->get_checkout_hook_options() as $hook => $label ) {
+            printf(
+                '<option value="%1$s" %2$s>%3$s</option>',
+                esc_attr( $hook ),
+                selected( $o['checkout_hook'], $hook, false ),
+                esc_html( $label )
+            );
+        }
+        echo '</select>';
+        echo '<p class="description">' .
+            esc_html__( 'Classic checkout only. WooCommerce Checkout Blocks use their own placement.', 'mh-free-gifts-for-woocommerce' ) .
+        '</p>';
+    }
+
+    public function field_cart_heading_text() {
+        $o = $this->get_display_settings();
+        printf(
+            '<input type="text" id="mhfgfwc_cart_heading_text" name="mhfgfwc_display_settings[cart_heading_text]" value="%s" class="regular-text" />',
+            esc_attr( $o['cart_heading_text'] )
+        );
+        echo '<p class="description">' .
+            esc_html__( 'Applies to the classic cart heading and the WooCommerce Blocks gift panel heading.', 'mh-free-gifts-for-woocommerce' ) .
+        '</p>';
+    }
+
+    public function field_checkout_toggle_text() {
+        $o = $this->get_display_settings();
+        printf(
+            '<input type="text" id="mhfgfwc_checkout_toggle_text" name="mhfgfwc_display_settings[checkout_toggle_text]" value="%s" class="regular-text" />',
+            esc_attr( $o['checkout_toggle_text'] )
+        );
+        echo '<p class="description">' .
+            esc_html__( 'Classic checkout only. Checkout Blocks render a panel heading instead of a coupon-style toggle.', 'mh-free-gifts-for-woocommerce' ) .
+        '</p>';
+    }
+
+    public function field_add_button_text() {
+        $o = $this->get_display_settings();
+        printf(
+            '<input type="text" id="mhfgfwc_add_button_text" name="mhfgfwc_display_settings[add_button_text]" value="%s" class="regular-text" />',
+            esc_attr( $o['add_button_text'] )
+        );
+    }
+
+    public function field_remove_button_text() {
+        $o = $this->get_display_settings();
+        printf(
+            '<input type="text" id="mhfgfwc_remove_button_text" name="mhfgfwc_display_settings[remove_button_text]" value="%s" class="regular-text" />',
+            esc_attr( $o['remove_button_text'] )
+        );
+    }
+
+    public function field_cart_heading_font_size() {
+        $o = $this->get_display_settings();
+        printf(
+            '<input type="number" id="mhfgfwc_cart_heading_font_size" name="mhfgfwc_display_settings[cart_heading_font_size]" value="%d" min="10" max="48" class="small-text" />',
+            (int) $o['cart_heading_font_size']
+        );
+        echo ' <span class="description">' .
+            esc_html__( 'Controls the cart/section heading size.', 'mh-free-gifts-for-woocommerce' ) .
+        '</span>';
+    }
+
+    public function field_checkout_toggle_font_size() {
+        $o = $this->get_display_settings();
+        printf(
+            '<input type="number" id="mhfgfwc_checkout_toggle_font_size" name="mhfgfwc_display_settings[checkout_toggle_font_size]" value="%d" min="10" max="48" class="small-text" />',
+            (int) $o['checkout_toggle_font_size']
+        );
+        echo ' <span class="description">' .
+            esc_html__( 'Controls the classic checkout toggle size.', 'mh-free-gifts-for-woocommerce' ) .
+        '</span>';
     }
 
     public function field_text_color() {
@@ -1139,6 +1447,17 @@ class MHFGFWC_Admin {
         );
         echo ' <span class="description">' .
             esc_html__( 'Pixels (default: 2). Controls the border thickness of your buttons.', 'mh-free-gifts-for-woocommerce' ) .
+        '</span>';
+    }
+
+    public function field_button_font_size() {
+        $o = $this->get_button_styles();
+        printf(
+            '<input type="number" id="mhfgfwc_button_font_size" name="mhfgfwc_button_styles[font_size]" value="%d" min="10" max="32" class="small-text" />',
+            (int) $o['font_size']
+        );
+        echo ' <span class="description">' .
+            esc_html__( 'Pixels (default: 15). Controls the Add/Remove button text size.', 'mh-free-gifts-for-woocommerce' ) .
         '</span>';
     }
 

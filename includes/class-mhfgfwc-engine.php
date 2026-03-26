@@ -100,100 +100,422 @@ final class MHFGFWC_Engine {
      * @param int   $user_id  Current user ID.
      * @return void
      */
-    public function auto_add_eligible_gifts( $eligible, $user_id ) {
-        if ( ! function_exists( 'WC' ) || ! WC()->cart ) {
-            return;
-        }
+	    public function auto_add_eligible_gifts( $eligible, $user_id ) {
+	        if ( ! function_exists( 'WC' ) || ! WC()->cart ) {
+	            return;
+	        }
 
-        // Avoid doing this work in admin (except AJAX), and avoid notices during AJAX.
-        if ( is_admin() && ! defined( 'DOING_AJAX' ) ) {
-            return;
-        }
+	        // Avoid doing this work in admin (except AJAX), and avoid notices during AJAX.
+	        if ( is_admin() && ! defined( 'DOING_AJAX' ) ) {
+	            return;
+	        }
 
-        // Prevent recursion / loops.
-        static $running = false;
-        if ( $running ) {
-            return;
-        }
+	        // Prevent recursion / loops.
+	        static $running = false;
+	        if ( $running ) {
+	            return;
+	        }
 
-        // Track notices per request to avoid duplicates when Woo triggers multiple cart recalcs.
-        static $notice_sent = array();
+	        // Track notices per request to avoid duplicates when Woo triggers multiple cart recalcs.
+	        static $notice_sent = array();
+	        $allow_accumulation = $this->allow_gift_accumulation();
+	        $running = true;
 
-        $running = true;
+	        if ( ! $allow_accumulation ) {
+	            $preferred = $this->get_preferred_auto_add_rule( (array) $eligible );
+	            if ( ! empty( $preferred['rule_id'] ) ) {
+	                $this->sync_preferred_auto_add_gift( (int) $preferred['rule_id'], (array) $preferred['payload'], $notice_sent );
+	            }
 
-        foreach ( (array) $eligible as $rule_id => $payload ) {
-            $rule_id = absint( $rule_id );
-            if ( $rule_id <= 0 || ! is_array( $payload ) ) {
-                continue;
-            }
+	            $running = false;
+	            return;
+	        }
 
-            $rule = (array) ( $payload['rule'] ?? array() );
-            $auto = ! empty( $rule['auto_add_gift'] );
-            if ( ! $auto ) {
-                continue;
-            }
+	        foreach ( (array) $eligible as $rule_id => $payload ) {
+	            $rule_id = absint( $rule_id );
+	            if ( $rule_id <= 0 || ! is_array( $payload ) ) {
+	                continue;
+	            }
 
-            $gifts = array_map( 'intval', (array) ( $payload['gifts'] ?? array() ) );
-            $gifts = array_values( array_filter( $gifts ) );
-            if ( 1 !== count( $gifts ) ) {
-                // Guardrail: auto-add only works with a single gift in the rule.
-                continue;
-            }
+	            $rule = (array) ( $payload['rule'] ?? array() );
+	            $auto = ! empty( $rule['auto_add_gift'] );
+	            if ( ! $auto ) {
+	                continue;
+	            }
 
-            $desired_gift_id = (int) $gifts[0];
-            if ( $desired_gift_id <= 0 ) {
-                continue;
-            }
+	            $gifts = array_map( 'intval', (array) ( $payload['gifts'] ?? array() ) );
+	            $gifts = array_values( array_filter( $gifts ) );
+	            if ( 1 !== count( $gifts ) ) {
+	                // Guardrail: auto-add only works with a single gift in the rule.
+	                continue;
+	            }
 
-            // Find existing gifts for this rule.
-            $existing = $this->get_cart_gift_items_for_rule( $rule_id, $desired_gift_id );
+	            $desired_gift_id = (int) $gifts[0];
+	            if ( $desired_gift_id <= 0 ) {
+	                continue;
+	            }
 
-            // If gift exists and matches, nothing to do.
-            if ( ! empty( $existing['matches_desired'] ) ) {
-                continue;
-            }
+	            $this->sync_auto_add_rule_gift_quantity( $rule_id, (array) $payload, $notice_sent );
+	        }
 
-            // If gifts exist but don't match the desired gift, remove them (auto-swap).
-            $had_existing = ! empty( $existing['keys'] );
-            if ( $had_existing ) {
-                foreach ( (array) $existing['keys'] as $cart_item_key ) {
-                    WC()->cart->remove_cart_item( $cart_item_key );
-                }
-            }
+	        $running = false;
+	    }
 
-            // Add the desired gift.
-            $added = $this->add_gift_to_cart( $desired_gift_id, $rule_id );
+	/**
+	 * Pick the preferred auto-add rule when accumulation is disabled.
+	 * Higher qualifying spend/qty tiers win over lower ones.
+	 *
+	 * @param array $eligible Eligible rules payload keyed by rule ID.
+	 * @return array{rule_id:int,payload:array}
+	 */
+	private function get_preferred_auto_add_rule( array $eligible ) {
+		$candidates = array();
 
-            if ( $added && ( ! defined( 'DOING_AJAX' ) || ! DOING_AJAX ) ) {
-                $product = wc_get_product( $desired_gift_id );
-                $name    = $product ? $product->get_name() : __( 'Free gift', 'mh-free-gifts-for-woocommerce' );
+		foreach ( $eligible as $rule_id => $payload ) {
+			if ( ! is_array( $payload ) ) {
+				continue;
+			}
 
-                $notice_key = ( $had_existing ? 'auto_swap_' : 'auto_add_' ) . $rule_id . '_' . $desired_gift_id;
-                if ( empty( $notice_sent[ $notice_key ] ) ) {
-                    $msg = $had_existing
-                        ? sprintf( __( 'Free gift updated: %s', 'mh-free-gifts-for-woocommerce' ), $name )
-                        : sprintf( __( 'Free gift added: %s', 'mh-free-gifts-for-woocommerce' ), $name );
+			$rule  = isset( $payload['rule'] ) && is_array( $payload['rule'] ) ? $payload['rule'] : array();
+			$gifts = array_values( array_filter( array_map( 'intval', (array) ( $payload['gifts'] ?? array() ) ) ) );
 
-                    wc_add_notice( $msg, 'success' );
-                    $notice_sent[ $notice_key ] = true;
-                }
-            }
-        }
+			if ( empty( $rule['auto_add_gift'] ) || 1 !== count( $gifts ) ) {
+				continue;
+			}
 
-        $running = false;
-    }
+			$payload['rule']  = $rule;
+			$payload['gifts'] = $gifts;
+			$candidates[ absint( $rule_id ) ] = $payload;
+		}
+
+		if ( empty( $candidates ) ) {
+			return array(
+				'rule_id' => 0,
+				'payload' => array(),
+			);
+		}
+
+		uasort(
+			$candidates,
+			function( $a, $b ) {
+				return $this->compare_auto_add_rule_priority( (array) $a, (array) $b );
+			}
+		);
+
+		$rule_id = (int) key( $candidates );
+		$payload = current( $candidates );
+
+		return array(
+			'rule_id' => $rule_id,
+			'payload' => is_array( $payload ) ? $payload : array(),
+		);
+	}
+
+	/**
+	 * Compare two eligible auto-add rules for non-accumulation mode.
+	 * Prefer higher subtotal thresholds, then higher quantity thresholds, then higher gift value.
+	 *
+	 * @param array $left  Eligible rule payload.
+	 * @param array $right Eligible rule payload.
+	 * @return int
+	 */
+	private function compare_auto_add_rule_priority( array $left, array $right ) {
+		$left_rule  = isset( $left['rule'] ) && is_array( $left['rule'] ) ? $left['rule'] : array();
+		$right_rule = isset( $right['rule'] ) && is_array( $right['rule'] ) ? $right['rule'] : array();
+
+		$comparisons = array(
+			array(
+				$this->get_rule_threshold_weight( $left_rule, 'subtotal_operator', 'subtotal_amount' ),
+				$this->get_rule_threshold_weight( $right_rule, 'subtotal_operator', 'subtotal_amount' ),
+			),
+			array(
+				$this->get_rule_threshold_weight( $left_rule, 'qty_operator', 'qty_amount' ),
+				$this->get_rule_threshold_weight( $right_rule, 'qty_operator', 'qty_amount' ),
+			),
+			array(
+				$this->get_payload_max_gift_price( $left ),
+				$this->get_payload_max_gift_price( $right ),
+			),
+			array(
+				$this->get_rule_timestamp_weight( $left_rule ),
+				$this->get_rule_timestamp_weight( $right_rule ),
+			),
+			array(
+				(int) ( $left_rule['id'] ?? 0 ),
+				(int) ( $right_rule['id'] ?? 0 ),
+			),
+		);
+
+		foreach ( $comparisons as $pair ) {
+			if ( $pair[0] === $pair[1] ) {
+				continue;
+			}
+
+			return ( $pair[0] > $pair[1] ) ? -1 : 1;
+		}
+
+		return 0;
+	}
+
+	/**
+	 * Convert a rule threshold into a sortable weight.
+	 * Greater-than style rules rank higher as the threshold increases.
+	 *
+	 * @param array  $rule           Rule payload.
+	 * @param string $operator_key   Operator field.
+	 * @param string $threshold_key  Threshold field.
+	 * @return float
+	 */
+	private function get_rule_threshold_weight( array $rule, $operator_key, $threshold_key ) {
+		if ( ! isset( $rule[ $threshold_key ] ) || '' === $rule[ $threshold_key ] || null === $rule[ $threshold_key ] ) {
+			return -INF;
+		}
+
+		$weight   = (float) $rule[ $threshold_key ];
+		$operator = isset( $rule[ $operator_key ] ) ? (string) $rule[ $operator_key ] : '';
+
+		if ( in_array( $operator, array( '<', '<=' ), true ) ) {
+			return 0 - $weight;
+		}
+
+		return $weight;
+	}
+
+	/**
+	 * Resolve a comparable timestamp weight from the rule.
+	 *
+	 * @param array $rule Rule payload.
+	 * @return int
+	 */
+	private function get_rule_timestamp_weight( array $rule ) {
+		$raw = isset( $rule['last_modified'] ) ? (string) $rule['last_modified'] : '';
+		$ts  = $raw ? strtotime( $raw ) : false;
+
+		return $ts ? (int) $ts : 0;
+	}
+
+	/**
+	 * Find the maximum configured gift price for an eligible rule payload.
+	 *
+	 * @param array $payload Eligible rule payload.
+	 * @return float
+	 */
+	private function get_payload_max_gift_price( array $payload ) {
+		$max   = 0.0;
+		$gifts = array_values( array_filter( array_map( 'intval', (array) ( $payload['gifts'] ?? array() ) ) ) );
+
+		foreach ( $gifts as $gift_id ) {
+			$product = wc_get_product( $gift_id );
+			if ( ! $product ) {
+				continue;
+			}
+
+			$price = (float) $product->get_price();
+			if ( $price > $max ) {
+				$max = $price;
+			}
+		}
+
+		return $max;
+	}
+
+	/**
+	 * Keep non-accumulating auto-add gifts synced to the preferred eligible rule.
+	 *
+	 * @param int   $rule_id     Preferred rule ID.
+	 * @param array $payload     Preferred rule payload.
+	 * @param array $notice_sent Deduplication map for notices.
+	 * @return void
+	 */
+	private function sync_preferred_auto_add_gift( $rule_id, array $payload, array &$notice_sent ) {
+		if ( ! function_exists( 'WC' ) || ! WC()->cart ) {
+			return;
+		}
+
+		$rule_id = absint( $rule_id );
+		$gifts   = array_values( array_filter( array_map( 'intval', (array) ( $payload['gifts'] ?? array() ) ) ) );
+		if ( $rule_id <= 0 || 1 !== count( $gifts ) ) {
+			return;
+		}
+
+		$desired_gift_id  = (int) $gifts[0];
+		$manual_gift_found = false;
+		$auto_keys_to_remove = array();
+
+		foreach ( WC()->cart->get_cart() as $cart_item_key => $cart_item ) {
+			if ( empty( $cart_item['mhfgfwc_gift'] ) ) {
+				continue;
+			}
+
+			$item_rule_id = absint( $cart_item['mhfgfwc_gift'] );
+			$item_auto    = ! empty( $cart_item['mhfgfwc_auto_added'] );
+			$item_pid     = isset( $cart_item['variation_id'] ) && (int) $cart_item['variation_id']
+				? (int) $cart_item['variation_id']
+				: (int) ( $cart_item['product_id'] ?? 0 );
+
+			$is_preferred_match = ( $item_rule_id === $rule_id && $item_pid === $desired_gift_id );
+
+			if ( $item_auto ) {
+				if ( ! $is_preferred_match ) {
+					$auto_keys_to_remove[] = $cart_item_key;
+				}
+				continue;
+			}
+
+			if ( $item_rule_id !== $rule_id ) {
+				$manual_gift_found = true;
+			}
+		}
+
+		if ( ! empty( $auto_keys_to_remove ) ) {
+			foreach ( $auto_keys_to_remove as $cart_item_key ) {
+				WC()->cart->remove_cart_item( $cart_item_key );
+			}
+		}
+
+		$existing = $this->get_cart_gift_items_for_rule( $rule_id, $desired_gift_id );
+		if ( ! empty( $existing['other_keys'] ) ) {
+			foreach ( (array) $existing['other_keys'] as $cart_item_key ) {
+				WC()->cart->remove_cart_item( $cart_item_key );
+			}
+			$existing = $this->get_cart_gift_items_for_rule( $rule_id, $desired_gift_id );
+		}
+
+		if ( $manual_gift_found && empty( $existing['desired_keys'] ) ) {
+			return;
+		}
+
+		$desired_count = $this->get_payload_allowed_gift_count( $payload );
+		$current_count = count( (array) $existing['desired_keys'] );
+		if ( $current_count >= $desired_count ) {
+			return;
+		}
+
+		$missing      = $desired_count - $current_count;
+		$had_existing = ! empty( $auto_keys_to_remove ) || ! empty( $existing['keys'] );
+		$added        = false;
+
+		for ( $i = 0; $i < $missing; $i++ ) {
+			if ( ! $this->add_gift_to_cart( $desired_gift_id, $rule_id ) ) {
+				break;
+			}
+			$added = true;
+		}
+
+		if ( ! $added ) {
+			return;
+		}
+
+		$this->maybe_add_auto_gift_notice( $desired_gift_id, $rule_id, $desired_count, $had_existing, $notice_sent );
+	}
+
+	/**
+	 * Keep an accumulating auto-add rule synced to the required number of copies.
+	 *
+	 * @param int   $rule_id     Rule ID.
+	 * @param array $payload     Eligible rule payload.
+	 * @param array $notice_sent Deduplication map for notices.
+	 * @return void
+	 */
+	private function sync_auto_add_rule_gift_quantity( $rule_id, array $payload, array &$notice_sent ) {
+		if ( ! function_exists( 'WC' ) || ! WC()->cart ) {
+			return;
+		}
+
+		$rule_id = absint( $rule_id );
+		$gifts   = array_values( array_filter( array_map( 'intval', (array) ( $payload['gifts'] ?? array() ) ) ) );
+		if ( $rule_id <= 0 || 1 !== count( $gifts ) ) {
+			return;
+		}
+
+		$desired_gift_id = (int) $gifts[0];
+		$desired_count   = $this->get_payload_allowed_gift_count( $payload );
+		$existing        = $this->get_cart_gift_items_for_rule( $rule_id, $desired_gift_id );
+		$had_existing    = ! empty( $existing['keys'] );
+
+		if ( ! empty( $existing['other_keys'] ) ) {
+			foreach ( (array) $existing['other_keys'] as $cart_item_key ) {
+				WC()->cart->remove_cart_item( $cart_item_key );
+			}
+			$existing = $this->get_cart_gift_items_for_rule( $rule_id, $desired_gift_id );
+		}
+
+		$current_count = count( (array) $existing['desired_keys'] );
+		if ( $current_count >= $desired_count ) {
+			return;
+		}
+
+		$missing = $desired_count - $current_count;
+		$added   = false;
+
+		for ( $i = 0; $i < $missing; $i++ ) {
+			if ( ! $this->add_gift_to_cart( $desired_gift_id, $rule_id ) ) {
+				break;
+			}
+			$added = true;
+		}
+
+		if ( ! $added ) {
+			return;
+		}
+
+		$this->maybe_add_auto_gift_notice( $desired_gift_id, $rule_id, $desired_count, $had_existing, $notice_sent );
+	}
+
+	/**
+	 * Resolve the required auto-added gift count from an eligible payload.
+	 *
+	 * @param array $payload Eligible rule payload.
+	 * @return int
+	 */
+	private function get_payload_allowed_gift_count( array $payload ) {
+		return max( 1, (int) ( $payload['allowed'] ?? 1 ) );
+	}
+
+	/**
+	 * Add a deduplicated success notice for auto-added gifts.
+	 *
+	 * @param int   $gift_product_id Gift product ID.
+	 * @param int   $rule_id         Rule ID.
+	 * @param int   $desired_count   Required auto-added copy count.
+	 * @param bool  $had_existing    Whether the rule already had any gift entries.
+	 * @param array $notice_sent     Deduplication map.
+	 * @return void
+	 */
+	private function maybe_add_auto_gift_notice( $gift_product_id, $rule_id, $desired_count, $had_existing, array &$notice_sent ) {
+		if ( defined( 'DOING_AJAX' ) && DOING_AJAX ) {
+			return;
+		}
+
+		$product    = wc_get_product( $gift_product_id );
+		$name       = $product ? $product->get_name() : __( 'Free gift', 'mh-free-gifts-for-woocommerce' );
+		$notice_key = ( $had_existing ? 'auto_update_' : 'auto_add_' ) . absint( $rule_id ) . '_' . absint( $gift_product_id ) . '_' . absint( $desired_count );
+
+		if ( ! empty( $notice_sent[ $notice_key ] ) ) {
+			return;
+		}
+
+		$msg = $had_existing
+			? sprintf( __( 'Free gift updated: %s', 'mh-free-gifts-for-woocommerce' ), $name )
+			: sprintf( __( 'Free gift added: %s', 'mh-free-gifts-for-woocommerce' ), $name );
+
+		wc_add_notice( $msg, 'success' );
+		$notice_sent[ $notice_key ] = true;
+	}
 
     /**
      * Return cart gift items for a rule.
      *
      * @param int $rule_id Rule ID.
-     * @return array {keys: string[], matches_desired: bool}
+     * @return array {keys: string[], desired_keys: string[], other_keys: string[], matches_desired: bool}
      */
     private function get_cart_gift_items_for_rule( $rule_id, $desired_gift_id = 0 ) {
         $rule_id = absint( $rule_id );
         $desired_gift_id = absint( $desired_gift_id );
         $out = array(
             'keys'            => array(),
+            'desired_keys'    => array(),
+            'other_keys'      => array(),
             'matches_desired' => false,
         );
 
@@ -211,7 +533,10 @@ final class MHFGFWC_Engine {
                 $pid = isset( $cart_item['product_id'] ) ? (int) $cart_item['product_id'] : 0;
                 $vid = isset( $cart_item['variation_id'] ) ? (int) $cart_item['variation_id'] : 0;
                 if ( $desired_gift_id === $pid || $desired_gift_id === $vid ) {
+                    $out['desired_keys'][] = $cart_item_key;
                     $out['matches_desired'] = true;
+                } else {
+                    $out['other_keys'][] = $cart_item_key;
                 }
             }
         }
@@ -227,9 +552,9 @@ final class MHFGFWC_Engine {
      * @param int $rule_id         Rule ID.
      * @return bool True if added.
      */
-    private function add_gift_to_cart( $gift_product_id, $rule_id ) {
-        $gift_product_id = absint( $gift_product_id );
-        $rule_id         = absint( $rule_id );
+	    private function add_gift_to_cart( $gift_product_id, $rule_id ) {
+	        $gift_product_id = absint( $gift_product_id );
+	        $rule_id         = absint( $rule_id );
 
         if ( ! $gift_product_id || ! $rule_id || ! function_exists( 'WC' ) || ! WC()->cart ) {
             return false;
@@ -268,8 +593,42 @@ final class MHFGFWC_Engine {
             );
         }
 
-        return ! empty( $cart_key );
-    }
+	        return ! empty( $cart_key );
+	    }
+
+	/**
+	 * Check whether gifts may stack across multiple eligible rules.
+	 *
+	 * @return bool
+	 */
+	private function allow_gift_accumulation() {
+		$settings = get_option( 'mhfgfwc_general_settings', array() );
+		if ( ! is_array( $settings ) ) {
+			return true;
+		}
+
+		return ! isset( $settings['allow_accumulation'] ) || ! empty( $settings['allow_accumulation'] );
+	}
+
+	/**
+	 * Count free-gift line items currently in the cart.
+	 *
+	 * @return int
+	 */
+	private function count_cart_gifts() {
+		if ( ! function_exists( 'WC' ) || ! WC()->cart ) {
+			return 0;
+		}
+
+		$count = 0;
+		foreach ( WC()->cart->get_cart() as $item ) {
+			if ( ! empty( $item['mhfgfwc_gift'] ) ) {
+				$count++;
+			}
+		}
+
+		return $count;
+	}
     
 	/**
 	 * Load active rules (cached in DB helper).
@@ -341,9 +700,13 @@ final class MHFGFWC_Engine {
 		// Subtotal: contents total; include tax if the store displays prices incl. tax.
 		$subtotal = $this->get_cart_subtotal_for_rules( $cart_obj );
 
-		// Quantity across all line items.
+		// Quantity across purchased line items only.
+		// Free gifts must not increase the qualifying quantity for gift rules.
 		$qty = 0;
 		foreach ( $cart_obj->get_cart() as $ci ) {
+			if ( ! empty( $ci['mhfgfwc_gift'] ) ) {
+				continue;
+			}
 			$qty += isset( $ci['quantity'] ) ? (int) $ci['quantity'] : 0;
 		}
 
@@ -464,7 +827,7 @@ final class MHFGFWC_Engine {
 				continue;
 			}
 
-			$allowed = isset( $rule['gift_quantity'] ) ? (int) $rule['gift_quantity'] : 1;
+			$allowed = $this->get_rule_allowed_gift_quantity( $rule, $qty );
 			$payload = array(
 				'rule'    => $rule,
 				'gifts'   => $gifts,
@@ -487,6 +850,8 @@ final class MHFGFWC_Engine {
 		// Store in WC session under a filterable key.
 		$session_key = apply_filters( 'mhfgfwc_session_key', self::SESSION_KEY );
 		WC()->session->set( $session_key, $eligible );
+		WC()->session->set( 'mhfgfwc_rules_rev', (int) get_option( 'mhfgfwc_rules_rev', 0 ) );
+		WC()->session->set( 'mhfgfwc_rules_user_id', (int) get_current_user_id() );
 
 		/**
 		 * Fires after the cart has been evaluated and session updated.
@@ -740,6 +1105,57 @@ final class MHFGFWC_Engine {
 			case '==': return ( $value == $threshold ); // phpcs:ignore WordPress.PHP.StrictComparisons.LooseComparison
 		}
 		return false;
+	}
+
+	/**
+	 * Resolve the allowed gift count for a rule after quantity scaling.
+	 *
+	 * @param array $rule Rule payload.
+	 * @param int   $qty  Current cart quantity.
+	 * @return int
+	 */
+	private function get_rule_allowed_gift_quantity( array $rule, $qty ) {
+		$base_allowed = isset( $rule['gift_quantity'] ) ? max( 1, (int) $rule['gift_quantity'] ) : 1;
+
+		if ( empty( $rule['gift_quantity_multiplier'] ) ) {
+			return $base_allowed;
+		}
+
+		$step = $this->get_rule_quantity_multiple_step( $rule );
+		if ( $step <= 0 ) {
+			return $base_allowed;
+		}
+
+		$multiples = (int) floor( max( 0, (int) $qty ) / $step );
+		if ( $multiples < 1 ) {
+			return $base_allowed;
+		}
+
+		return max( 1, $base_allowed * $multiples );
+	}
+
+	/**
+	 * Resolve the cart quantity step used for gift-quantity multiplication.
+	 *
+	 * @param array $rule Rule payload.
+	 * @return int
+	 */
+	private function get_rule_quantity_multiple_step( array $rule ) {
+		$qty_amount = isset( $rule['qty_amount'] ) ? (int) $rule['qty_amount'] : 0;
+		if ( $qty_amount <= 0 ) {
+			return 0;
+		}
+
+		$operator = isset( $rule['qty_operator'] ) ? (string) $rule['qty_operator'] : '';
+		if ( '>=' === $operator ) {
+			return $qty_amount;
+		}
+
+		if ( '>' === $operator ) {
+			return $qty_amount + 1;
+		}
+
+		return 0;
 	}
 
 	/**

@@ -72,7 +72,7 @@
   // Render gifts HTML via AJAX
   // ---------------------------
   function renderGifts() {
-    const url = `${cfg.renderUrl}&nonce=${encodeURIComponent(cfg.nonce || '')}`;
+    const url = `${cfg.renderUrl}&nonce=${encodeURIComponent(cfg.nonce || '')}&context=${encodeURIComponent(cfg.context || 'cart')}`;
     return fetch(url, { credentials: 'same-origin' })
       .then(r => r.text())
       .then(html => {
@@ -98,6 +98,8 @@
   // Mark and lock a single row
   function markAndLockRow(row) {
     if (!row) return;
+    const giftLabel = String(cfg.i18nFreeGift || 'Free gift').trim();
+
     // qty input + +/- buttons (Blocks cart)
     const input = row.querySelector('.wc-block-components-quantity-selector__input');
     const minus = row.querySelector('.wc-block-components-quantity-selector__button--minus');
@@ -122,6 +124,30 @@
       label.className = 'mhfgfwc-fixed-qty';
       label.textContent = '× 1';
       qtyWrap.insertBefore(label, qtyWrap.firstChild);
+    }
+
+    // Hide the duplicated metadata row if Woo Blocks renders one.
+    row.querySelectorAll('.wc-block-components-product-details__value').forEach((meta) => {
+      const txt = (meta.textContent || '').trim().toLowerCase();
+      if (txt !== giftLabel.toLowerCase()) return;
+
+      const metaRow = meta.closest('.wc-block-components-product-details__item');
+      if (metaRow) {
+        metaRow.style.display = 'none';
+      } else {
+        meta.style.display = 'none';
+      }
+    });
+
+    // Inject the visible badge under the product name.
+    if (!row.querySelector('.mhfgfwc-badge')) {
+      const name = row.querySelector('.wc-block-components-product-name');
+      if (name) {
+        const badge = document.createElement('div');
+        badge.className = 'mhfgfwc-badge mhfgfwc-block-badge';
+        badge.textContent = giftLabel;
+        name.insertAdjacentElement('afterend', badge);
+      }
     }
 
     row.classList.add('mhfgfwc-is-gift');

@@ -115,6 +115,8 @@ jQuery(function ($) {
   function syncAutoAddGiftUi() {
     var $giftSelect = $('#mhfgfwc_gifts');
     var $autoAdd    = $('#mhfgfwc_auto_add_gift');
+    var $giftQty    = $('#mhfgfwc_gift_quantity');
+    var manualValue;
 
     if (!$giftSelect.length || !$autoAdd.length) return;
 
@@ -126,21 +128,66 @@ jQuery(function ($) {
     // Disable auto-add if there isn't exactly one gift.
     if (selected.length !== 1) {
       $autoAdd.prop('checked', false).prop('disabled', true);
+
+      if ($giftQty.length) {
+        manualValue = $giftQty.data('manualValue');
+        if (manualValue !== undefined && manualValue !== null && manualValue !== '') {
+          $giftQty.val(manualValue);
+        }
+      }
     } else {
       $autoAdd.prop('disabled', false);
+    }
+
+    if ($giftQty.length) {
+      if ($autoAdd.is(':checked')) {
+        if (typeof $giftQty.data('manualValue') === 'undefined') {
+          $giftQty.data('manualValue', $giftQty.val() || '1');
+        }
+
+        $giftQty.val('1').prop('readonly', true);
+      } else {
+        $giftQty.prop('readonly', false);
+      }
+    }
+  }
+
+  function syncGiftQuantityMultiplierUi() {
+    var $multiplier  = $('#mhfgfwc_gift_quantity_multiplier');
+    var $qtyOperator = $('select[name="qty_operator"]');
+    var $qtyAmount   = $('input[name="qty_amount"]');
+
+    if (!$multiplier.length) return;
+
+    var qtyValue = parseInt($qtyAmount.val(), 10) || 0;
+    var supportedOperator = $qtyOperator.length && ($qtyOperator.val() === '>=' || $qtyOperator.val() === '>');
+    var enabled = supportedOperator && qtyValue > 0;
+
+    if (!enabled) {
+      $multiplier.prop('checked', false).prop('disabled', true);
+    } else {
+      $multiplier.prop('disabled', false);
     }
   }
 
   // When gifts change, re-evaluate whether auto-add can be enabled.
   $(document).on('change', '#mhfgfwc_gifts', function () {
     syncAutoAddGiftUi();
+    syncGiftQuantityMultiplierUi();
   });
 
   // If user checks auto-add while multiple gifts are selected, keep only the first.
   $(document).on('change', '#mhfgfwc_auto_add_gift', function () {
     var $cb        = $(this);
     var $giftSelect = $('#mhfgfwc_gifts');
+    var $giftQty    = $('#mhfgfwc_gift_quantity');
     if (!$cb.is(':checked') || !$giftSelect.length) {
+      if ($giftQty.length) {
+        var manualValue = $giftQty.data('manualValue');
+        if (manualValue !== undefined && manualValue !== null && manualValue !== '') {
+          $giftQty.val(manualValue);
+        }
+      }
       syncAutoAddGiftUi();
       return;
     }
@@ -156,8 +203,20 @@ jQuery(function ($) {
     }
 
     syncAutoAddGiftUi();
+    syncGiftQuantityMultiplierUi();
+  });
+
+  $(document).on('input change', '#mhfgfwc_gift_quantity', function () {
+    if (!$('#mhfgfwc_auto_add_gift').is(':checked')) {
+      $(this).data('manualValue', $(this).val());
+    }
+  });
+
+  $(document).on('change input', 'select[name="qty_operator"], input[name="qty_amount"]', function () {
+    syncGiftQuantityMultiplierUi();
   });
 
   // Initial sync on page load.
   syncAutoAddGiftUi();
+  syncGiftQuantityMultiplierUi();
 });
