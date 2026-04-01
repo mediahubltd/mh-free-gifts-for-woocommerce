@@ -12,7 +12,7 @@ class MHFGFWC_Install {
     /**
      * Increment when you change SQL schemas.
      */
-    const SCHEMA_VERSION = '1.0.3';
+    const SCHEMA_VERSION = '1.0.5';
 
     /**
      * Uniform, prefixed option key for schema version.
@@ -78,6 +78,7 @@ class MHFGFWC_Install {
             subtotal_amount DECIMAL(10,2) NULL,
             qty_operator VARCHAR(4) NULL,
             qty_amount INT(10) UNSIGNED NULL,
+            threshold_scope VARCHAR(20) NOT NULL DEFAULT 'cart',
             gift_quantity_multiplier TINYINT(1) NOT NULL DEFAULT 0,
             date_from DATETIME NULL,
             date_to DATETIME NULL,
@@ -99,5 +100,47 @@ class MHFGFWC_Install {
 
         dbDelta( $sql_rules );
         dbDelta( $sql_usage );
+
+        self::ensure_rules_table_column(
+            $rules_table,
+            'threshold_scope',
+            "ALTER TABLE {$rules_table} ADD COLUMN threshold_scope VARCHAR(20) NOT NULL DEFAULT 'cart' AFTER qty_amount"
+        );
+    }
+
+    /**
+     * Ensure a rules-table column exists, even on installs where dbDelta misses it.
+     *
+     * @param string $table      Rules table name.
+     * @param string $column     Column name.
+     * @param string $alter_sql  ALTER TABLE statement.
+     * @return void
+     */
+    private static function ensure_rules_table_column( $table, $column, $alter_sql ) {
+        global $wpdb;
+
+        $table  = (string) $table;
+        $column = preg_replace( '/[^a-zA-Z0-9_]/', '', (string) $column );
+
+        if ( '' === $table || '' === $column ) {
+            return;
+        }
+
+        // phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+        $exists = $wpdb->get_var(
+            $wpdb->prepare(
+                "SHOW COLUMNS FROM {$table} LIKE %s",
+                $column
+            )
+        );
+        // phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+
+        if ( $exists === $column ) {
+            return;
+        }
+
+        // phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+        $wpdb->query( $alter_sql );
+        // phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
     }
 }

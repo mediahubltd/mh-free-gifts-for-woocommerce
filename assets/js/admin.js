@@ -170,6 +170,31 @@ jQuery(function ($) {
     }
   }
 
+  function syncThresholdScopeUi() {
+    var $row          = $('#mhfgfwc_threshold_scope_row');
+    var $scope        = $('#mhfgfwc_threshold_scope');
+    var productDeps   = $('select[name="product_dependency[]"]').val() || [];
+    var categoryDeps  = $('select[name="category_dependency[]"]').val() || [];
+
+    if (!$row.length || !$scope.length) return;
+
+    if (!Array.isArray(productDeps)) {
+      productDeps = [productDeps];
+    }
+
+    if (!Array.isArray(categoryDeps)) {
+      categoryDeps = [categoryDeps];
+    }
+
+    if (productDeps.length || categoryDeps.length) {
+      $row.show();
+      return;
+    }
+
+    $scope.val('cart');
+    $row.hide();
+  }
+
   // When gifts change, re-evaluate whether auto-add can be enabled.
   $(document).on('change', '#mhfgfwc_gifts', function () {
     syncAutoAddGiftUi();
@@ -216,7 +241,12 @@ jQuery(function ($) {
     syncGiftQuantityMultiplierUi();
   });
 
+  $(document).on('change', 'select[name="product_dependency[]"], select[name="category_dependency[]"]', function () {
+    syncThresholdScopeUi();
+  });
+
   // Initial sync on page load.
   syncAutoAddGiftUi();
   syncGiftQuantityMultiplierUi();
+  syncThresholdScopeUi();
 });

@@ -697,18 +697,9 @@ final class MHFGFWC_Engine {
 
 		$cart_obj = WC()->cart;
 
-		// Subtotal: contents total; include tax if the store displays prices incl. tax.
-		$subtotal = $this->get_cart_subtotal_for_rules( $cart_obj );
-
-		// Quantity across purchased line items only.
-		// Free gifts must not increase the qualifying quantity for gift rules.
-		$qty = 0;
-		foreach ( $cart_obj->get_cart() as $ci ) {
-			if ( ! empty( $ci['mhfgfwc_gift'] ) ) {
-				continue;
-			}
-			$qty += isset( $ci['quantity'] ) ? (int) $ci['quantity'] : 0;
-		}
+		$cart_items = $this->get_purchased_cart_items_for_rule_evaluation( $cart_obj );
+		$subtotal   = $this->get_cart_items_subtotal_for_rules( $cart_items, $cart_obj );
+		$qty        = $this->get_cart_items_quantity_for_rules( $cart_items );
 
 		$eligible        = array();
 		$user_id         = get_current_user_id();
@@ -749,12 +740,26 @@ final class MHFGFWC_Engine {
 				continue;
 			}
 
+			$rule_context = $this->get_rule_threshold_context( $rule, $cart_items, $subtotal, $qty );
+
+			// Product dependency.
+			if ( ! $rule_context['has_product_dependency_match'] ) {
+				do_action( 'mhfgfwc_rule_is_eligible', $rule_id, false, 'product_dependency' );
+				continue;
+			}
+
+			// Category dependency.
+			if ( ! $rule_context['has_category_dependency_match'] ) {
+				do_action( 'mhfgfwc_rule_is_eligible', $rule_id, false, 'category_dependency' );
+				continue;
+			}
+
 			// Subtotal condition.
 			if ( isset( $rule['subtotal_operator'], $rule['subtotal_amount'] )
 				&& $rule['subtotal_operator'] !== ''
 				&& $rule['subtotal_amount'] !== null && $rule['subtotal_amount'] !== '' ) {
 
-				if ( ! $this->compare( $subtotal, (string) $rule['subtotal_operator'], (float) $rule['subtotal_amount'] ) ) {
+				if ( ! $this->compare( $rule_context['subtotal'], (string) $rule['subtotal_operator'], (float) $rule['subtotal_amount'] ) ) {
 					do_action( 'mhfgfwc_rule_is_eligible', $rule_id, false, 'subtotal' );
 					continue;
 				}
@@ -765,50 +770,11 @@ final class MHFGFWC_Engine {
 				&& $rule['qty_operator'] !== ''
 				&& $rule['qty_amount'] !== null && $rule['qty_amount'] !== '' ) {
 
-				if ( ! $this->compare( $qty, (string) $rule['qty_operator'], (int) $rule['qty_amount'] ) ) {
+				if ( ! $this->compare( $rule_context['qty'], (string) $rule['qty_operator'], (int) $rule['qty_amount'] ) ) {
 					do_action( 'mhfgfwc_rule_is_eligible', $rule_id, false, 'qty' );
 					continue;
 				}
 			}
-
-			// Product dependency (check both product_id and variation_id).
-			$deps = array_filter( (array) maybe_unserialize( $rule['product_dependency'] ?? array() ), 'is_numeric' );
-			if ( $deps ) {
-				$deps   = array_map( 'intval', $deps );
-				$found  = false;
-				foreach ( $cart_obj->get_cart() as $item ) {
-					$pid = isset( $item['product_id'] ) ? (int) $item['product_id'] : 0;
-					$vid = isset( $item['variation_id'] ) ? (int) $item['variation_id'] : 0;
-					if ( ( $pid && in_array( $pid, $deps, true ) ) || ( $vid && in_array( $vid, $deps, true ) ) ) {
-						$found = true;
-						break;
-					}
-				}
-				if ( ! $found ) {
-					do_action( 'mhfgfwc_rule_is_eligible', $rule_id, false, 'product_dependency' );
-					continue;
-				}
-			}
-            
-            /**
-             * Category dependency (product_cat terms).
-             * Accepts serialized array stored in DB column:
-             *   - 'category_dependency' (preferred), OR
-             *   - 'product_category_dependency' (fallback if you used that name)
-             */
-            $cat_deps_raw = $rule['category_dependency'] ?? ( $rule['product_category_dependency'] ?? array() );
-
-            $cat_deps = array_map(
-                'intval',
-                array_filter( (array) maybe_unserialize( $cat_deps_raw ), 'is_numeric' )
-            );
-
-            if ( $cat_deps ) {
-                if ( ! $this->cart_has_required_categories( $cat_deps ) ) {
-                    do_action( 'mhfgfwc_rule_is_eligible', $rule_id, false, 'category_dependency' );
-                    continue;
-                }
-            }
 
 			// User dependency.
 			$users = array_filter( (array) maybe_unserialize( $rule['user_dependency'] ?? array() ), 'is_numeric' );
@@ -827,7 +793,7 @@ final class MHFGFWC_Engine {
 				continue;
 			}
 
-			$allowed = $this->get_rule_allowed_gift_quantity( $rule, $qty );
+			$allowed = $this->get_rule_allowed_gift_quantity( $rule, $rule_context['qty'] );
 			$payload = array(
 				'rule'    => $rule,
 				'gifts'   => $gifts,
@@ -1202,6 +1168,233 @@ final class MHFGFWC_Engine {
          */
         return (float) apply_filters( 'mhfgfwc_rules_subtotal', $total, $cart );
     }
+
+	/**
+	 * Normalize purchased cart line items for per-rule evaluation.
+	 *
+	 * @param \WC_Cart $cart Cart instance.
+	 * @return array<int,array<string,mixed>>
+	 */
+	private function get_purchased_cart_items_for_rule_evaluation( $cart ) {
+		$items = array();
+
+		foreach ( $cart->get_cart() as $item ) {
+			if ( ! empty( $item['mhfgfwc_gift'] ) ) {
+				continue;
+			}
+
+			$category_ids = $this->get_cart_item_category_ids_for_rule_evaluation( $item );
+
+			$items[] = array(
+				'product_id'   => isset( $item['product_id'] ) ? (int) $item['product_id'] : 0,
+				'variation_id' => isset( $item['variation_id'] ) ? (int) $item['variation_id'] : 0,
+				'quantity'     => isset( $item['quantity'] ) ? (int) $item['quantity'] : 0,
+				'subtotal'     => ( isset( $item['line_total'] ) ? (float) $item['line_total'] : 0.0 ) + ( isset( $item['line_tax'] ) ? (float) $item['line_tax'] : 0.0 ),
+				'category_ids' => $category_ids,
+			);
+		}
+
+		return $items;
+	}
+
+	/**
+	 * Resolve cart-item category IDs for rule evaluation.
+	 * Variations inherit categories from the parent product, so prefer product_id.
+	 *
+	 * @param array<string,mixed> $item Raw Woo cart item.
+	 * @return array<int>
+	 */
+	private function get_cart_item_category_ids_for_rule_evaluation( array $item ) {
+		$product_id = isset( $item['product_id'] ) ? (int) $item['product_id'] : 0;
+		$product    = $product_id > 0 ? wc_get_product( $product_id ) : null;
+
+		if ( ! $product && isset( $item['data'] ) && is_object( $item['data'] ) && method_exists( $item['data'], 'get_category_ids' ) ) {
+			$product = $item['data'];
+		}
+
+		if ( ! $product || ! method_exists( $product, 'get_category_ids' ) ) {
+			return array();
+		}
+
+		return array_map( 'intval', (array) $product->get_category_ids() );
+	}
+
+	/**
+	 * Total purchased quantity from normalized cart items.
+	 *
+	 * @param array<int,array<string,mixed>> $cart_items Normalized purchased cart items.
+	 * @return int
+	 */
+	private function get_cart_items_quantity_for_rules( array $cart_items ) {
+		$total = 0;
+
+		foreach ( $cart_items as $cart_item ) {
+			$total += isset( $cart_item['quantity'] ) ? (int) $cart_item['quantity'] : 0;
+		}
+
+		return $total;
+	}
+
+	/**
+	 * Total purchased subtotal from normalized cart items.
+	 *
+	 * @param array<int,array<string,mixed>> $cart_items Normalized purchased cart items.
+	 * @param \WC_Cart                       $cart       Cart instance.
+	 * @return float
+	 */
+	private function get_cart_items_subtotal_for_rules( array $cart_items, $cart ) {
+		$total = 0.0;
+
+		foreach ( $cart_items as $cart_item ) {
+			$total += isset( $cart_item['subtotal'] ) ? (float) $cart_item['subtotal'] : 0.0;
+		}
+
+		return (float) apply_filters( 'mhfgfwc_rules_subtotal', $total, $cart );
+	}
+
+	/**
+	 * Resolve the quantity/subtotal basis for a rule.
+	 *
+	 * @param array                         $rule          Rule payload.
+	 * @param array<int,array<string,mixed>> $cart_items    Normalized purchased cart items.
+	 * @param float                         $cart_subtotal Whole-cart purchased subtotal.
+	 * @param int                           $cart_qty      Whole-cart purchased quantity.
+	 * @return array<string,mixed>
+	 */
+	private function get_rule_threshold_context( array $rule, array $cart_items, $cart_subtotal, $cart_qty ) {
+		$product_dependencies = $this->get_rule_product_dependencies( $rule );
+		$category_dependencies = $this->get_rule_category_dependencies( $rule );
+		$dependency_scope = ! empty( $product_dependencies ) || ! empty( $category_dependencies );
+		$scoped_qty = 0;
+		$scoped_subtotal = 0.0;
+		$has_product_dependency_match = empty( $product_dependencies );
+		$has_category_dependency_match = empty( $category_dependencies );
+
+		foreach ( $cart_items as $cart_item ) {
+			$matches_product = $this->cart_item_matches_products( $cart_item, $product_dependencies );
+			$matches_category = $this->cart_item_matches_categories( $cart_item, $category_dependencies );
+
+			if ( $matches_product ) {
+				$has_product_dependency_match = true;
+			}
+
+			if ( $matches_category ) {
+				$has_category_dependency_match = true;
+			}
+
+			if ( ! $this->cart_item_matches_dependency_filters( $cart_item, $product_dependencies, $category_dependencies ) ) {
+				continue;
+			}
+
+			$scoped_qty += isset( $cart_item['quantity'] ) ? (int) $cart_item['quantity'] : 0;
+			$scoped_subtotal += isset( $cart_item['subtotal'] ) ? (float) $cart_item['subtotal'] : 0.0;
+		}
+
+		$use_dependency_scope = $dependency_scope && 'dependencies' === $this->get_rule_threshold_scope( $rule );
+
+		return array(
+			'qty'                         => $use_dependency_scope ? $scoped_qty : (int) $cart_qty,
+			'subtotal'                    => $use_dependency_scope ? $scoped_subtotal : (float) $cart_subtotal,
+			'has_product_dependency_match' => $has_product_dependency_match,
+			'has_category_dependency_match' => $has_category_dependency_match,
+		);
+	}
+
+	/**
+	 * Resolve the threshold scope setting for a rule.
+	 *
+	 * @param array $rule Rule payload.
+	 * @return string
+	 */
+	private function get_rule_threshold_scope( array $rule ) {
+		$scope = isset( $rule['threshold_scope'] ) ? sanitize_key( (string) $rule['threshold_scope'] ) : 'cart';
+
+		return in_array( $scope, array( 'cart', 'dependencies' ), true ) ? $scope : 'cart';
+	}
+
+	/**
+	 * Parse configured product dependency IDs.
+	 *
+	 * @param array $rule Rule payload.
+	 * @return array<int>
+	 */
+	private function get_rule_product_dependencies( array $rule ) {
+		return array_map(
+			'intval',
+			array_filter( (array) maybe_unserialize( $rule['product_dependency'] ?? array() ), 'is_numeric' )
+		);
+	}
+
+	/**
+	 * Parse configured category dependency IDs.
+	 *
+	 * @param array $rule Rule payload.
+	 * @return array<int>
+	 */
+	private function get_rule_category_dependencies( array $rule ) {
+		$raw = $rule['category_dependency'] ?? ( $rule['product_category_dependency'] ?? array() );
+
+		return array_map(
+			'intval',
+			array_filter( (array) maybe_unserialize( $raw ), 'is_numeric' )
+		);
+	}
+
+	/**
+	 * Whether a cart item matches the configured product dependency IDs.
+	 *
+	 * @param array<string,mixed> $cart_item            Normalized cart item.
+	 * @param array<int>          $product_dependencies Product IDs / variation IDs.
+	 * @return bool
+	 */
+	private function cart_item_matches_products( array $cart_item, array $product_dependencies ) {
+		if ( empty( $product_dependencies ) ) {
+			return true;
+		}
+
+		$product_id   = isset( $cart_item['product_id'] ) ? (int) $cart_item['product_id'] : 0;
+		$variation_id = isset( $cart_item['variation_id'] ) ? (int) $cart_item['variation_id'] : 0;
+
+		return ( $product_id && in_array( $product_id, $product_dependencies, true ) )
+			|| ( $variation_id && in_array( $variation_id, $product_dependencies, true ) );
+	}
+
+	/**
+	 * Whether a cart item matches the configured category dependency IDs.
+	 *
+	 * @param array<string,mixed> $cart_item              Normalized cart item.
+	 * @param array<int>          $category_dependencies Category term IDs.
+	 * @return bool
+	 */
+	private function cart_item_matches_categories( array $cart_item, array $category_dependencies ) {
+		if ( empty( $category_dependencies ) ) {
+			return true;
+		}
+
+		$category_ids = isset( $cart_item['category_ids'] ) ? array_map( 'intval', (array) $cart_item['category_ids'] ) : array();
+
+		return ! empty( array_intersect( $category_dependencies, $category_ids ) );
+	}
+
+	/**
+	 * Whether a cart item matches all configured dependency filters for scoped thresholds.
+	 *
+	 * @param array<string,mixed> $cart_item              Normalized cart item.
+	 * @param array<int>          $product_dependencies  Product IDs / variation IDs.
+	 * @param array<int>          $category_dependencies Category term IDs.
+	 * @return bool
+	 */
+	private function cart_item_matches_dependency_filters( array $cart_item, array $product_dependencies, array $category_dependencies ) {
+		if ( ! empty( $product_dependencies ) && ! $this->cart_item_matches_products( $cart_item, $product_dependencies ) ) {
+			return false;
+		}
+
+		if ( ! empty( $category_dependencies ) && ! $this->cart_item_matches_categories( $cart_item, $category_dependencies ) ) {
+			return false;
+		}
+
+		return true;
+	}
 
 
 

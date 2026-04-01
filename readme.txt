@@ -5,8 +5,8 @@ Description: Let customers choose or auto-add a free gift when cart criteria are
 Tags: free gifts for woocommerce, buy one get one, free gift, Gift Product Woocommerce, WooCommerce gift
 Requires at least: 6.0
 Tested up to: 6.9.4
-Stable tag: 1.1.0
-Version: 1.1.0
+Stable tag: 1.1.1
+Version: 1.1.1
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 Donate link: https://ko-fi.com/adk77
@@ -24,6 +24,7 @@ Offer free gifts automatically in WooCommerce! Set up smart rules based on cart 
 * 🤖 **Auto-add Single Gift Rules** — automatically add a qualifying gift to the cart when the rule is met, including repeated copies when quantity multiples apply.
 * 1️⃣ **Optional Non-Stacking Mode** — limit customers to gifts from one eligible rule at a time when multiple rules qualify.
 * 🔁 **Quantity-Based Gift Multiples** — scale the number of allowed gifts as customers hit higher cart-quantity multiples.
+* 🎯 **Dependency-Scoped Thresholds** — optionally count quantity and subtotal thresholds against only the matching dependency items instead of the whole cart.
 * 🧭 **Configurable Checkout Placement** — choose where the free gift section appears on classic WooCommerce checkout.
 * ✍️ **Custom Gift Text & Sizing** — change main gift labels and control button/heading font sizes without editing code.
 * ⚙️ **Smart Rule Conditions & Limits** — restrict by subtotal, quantity, date range, product, or user.
@@ -34,9 +35,10 @@ Offer free gifts automatically in WooCommerce! Set up smart rules based on cart 
 ### 🛒 How It Works
 
 1. Define your free gift rules in the admin — choose eligible products, usage limits, and visibility options.  
-2. Customers who qualify see a responsive **“Choose Your Free Gift”** section on the cart (and optionally checkout) page.  
-3. Customers can either choose a gift manually or let a single-gift rule auto-add it to the cart at $0.  
-4. MH Free Gifts handles all validation and limits automatically.
+2. Choose whether subtotal and quantity thresholds should use the whole cart or only the dependency-matching products when you want rules like “buy 2 from category X”.  
+3. Customers who qualify see a responsive **“Choose Your Free Gift”** section on the cart (and optionally checkout) page.  
+4. Customers can either choose a gift manually or let a single-gift rule auto-add it to the cart at $0.  
+5. MH Free Gifts handles all validation and limits automatically.
 
 Behind the scenes, the plugin intelligently evaluates cart contents, enforces limits, and prevents abuse — creating a **seamless, self-contained gifting experience** that enhances WooCommerce’s promotion capabilities without extra plugins or conflicts.
 
@@ -49,12 +51,13 @@ General Settings
 * **Select Gifts** (Select 1 or more gifts you would like in your gift rule)
 * **Auto-add Gift** (Automatically adds the selected gift to the cart when the rule is met. Requires exactly 1 selected gift and uses a base quantity of 1)
 Display Settings
-* **Display Gift On** (Toggle between Cart or Cart/Checkout mode)
+* **Display Gifts On** (Toggle between Cart or Cart/Checkout mode)
 * **Items Per Row (Cart)** (decide how many items in a row you want displayed)
 Usage Restrictions
 * **Product Dependency** (Lock down rule to only allow free gifts to activate if any of these products are in the cart)
-* **Product Category Dependency (Limit rule to selected categories)
-* **User Dependency** (Limit he rule to individual customers)
+* **Product Category Dependency** (Limit rule to selected categories)
+* **Threshold Scope** (Choose whether Cart Subtotal, Cart Quantity, and quantity multiples use the whole purchased cart or only items matching the selected product/category dependencies. Example: if your rule is set to Cart Quantity >= 2 and a category dependency is set, Whole Purchased Cart qualifies with 1 matching item + 1 non-matching item, while Matching Dependency Items Only requires 2 matching items.)
+* **User Dependency** (Limit the rule to individual customers)
 * **Registered Users** Only (Only allowed existing customers to activate the rule)
 * **Number of Gifts Allowed** (Restrict the number of gifts a customer can add to their cart)
 * **Cart Subtotal** (Is Less Than, Is Greater Than, Is Less Than or Equal To, Is Greater Than or Equal To, Is Equal To) Set you Subtotal threshold amount
@@ -64,7 +67,7 @@ Usage Restrictions
 * **Valid To** (Set valid to date)
 Usage Limits
 * **Usage Limit per Rule** (Limits how many time the gift rule can be used)
-* **Uaage Limit per User** (Limits how many times an individual user can use the gift rule)
+* **Usage Limit per User** (Limits how many times an individual user can use the gift rule)
 Plugin Settings
 * **Allow Gift Accumulation** (When disabled, customers can keep gifts from only one eligible rule at a time)
 * **Checkout Placement** (Choose the classic WooCommerce checkout hook used for the free gift toggle)
@@ -114,6 +117,18 @@ Yes! There’s no premium version or upsells. Everything is included for free.
 Support is provided via the WordPress.org forums or through the Mediahub support site.
 
 == Changelog ==
+
+= 1.1.1 (2026-03-31) =
+* [Fixed] Rules can now scope Cart Quantity and Cart Subtotal thresholds to dependency-matching items, so offers such as “buy 2 from category X” no longer qualify with 1 item from category X plus 1 from another category.
+* [Improved] Quantity-multiple gift scaling now follows the same dependency-scoped quantity basis when that rule option is enabled.
+* [Improved] The rule editor now includes a Threshold Scope setting and only shows it when product or category dependencies are configured, making quantity-based dependency rules clearer to set up.
+* [Fixed] Upgraded installs now explicitly add the new Threshold Scope database column if dbDelta misses it, so dependency-scoped quantity and subtotal rules persist correctly after plugin updates.
+* [Fixed] Rule saves now retry after forcing the latest schema upgrade and show an admin error notice instead of silently failing when the rules table is missing a required column.
+* [Fixed] Dependency-scoped category rules now correctly recognize variation products by using the parent product categories during rule evaluation.
+* [Improved] Threshold Scope help text now includes whole-cart versus dependency-only examples so quantity-based category rules are easier to understand.
+* [Improved] Busy rule-editor help text is now being moved into compact info-icon tooltips, starting with the category dependency and Threshold Scope fields.
+* [Improved] Expanded compact info-icon tooltips to other long rule-form descriptions, including gift selection, auto-add, cart layout, gift quantity, and quantity-multiple guidance.
+* [Improved] Threshold Scope tooltip wording has been simplified with shorter whole-cart versus dependency-only examples.
 
 = 1.1.0 (2026-03-26) =
 * [Added] Per-rule Auto-add Gift support for single-gift promotions.

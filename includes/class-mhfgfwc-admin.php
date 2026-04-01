@@ -199,6 +199,26 @@ class MHFGFWC_Admin {
         );
     }
 
+    /**
+     * Render a small admin help tooltip trigger.
+     *
+     * @param string $content Tooltip HTML content.
+     * @return void
+     */
+    private function render_help_tip( $content ) {
+        $allowed = [
+            'br'     => [],
+            'strong' => [],
+            'em'     => [],
+            'span'   => [ 'class' => true ],
+        ];
+
+        echo '<span class="mhfgfwc-help-tip-wrapper">';
+        echo '<button type="button" class="mhfgfwc-help-tip dashicons dashicons-editor-help" aria-label="' . esc_attr__( 'More information', 'mh-free-gifts-for-woocommerce' ) . '"></button>';
+        echo '<span class="mhfgfwc-help-tip-bubble">' . wp_kses( $content, $allowed ) . '</span>';
+        echo '</span>';
+    }
+
 
     /**
      * List of rules (cached briefly to keep admin snappy)
@@ -312,13 +332,22 @@ class MHFGFWC_Admin {
         // Success notices
         if ( ! empty( $_GET['message'] ) ) {
             $msg = '';
+            $type = 'success';
             switch ( sanitize_text_field( wp_unslash( $_GET['message'] ) ) ) {
                 case 'created': $msg = __( 'New gift‐rule created.', 'mh-free-gifts-for-woocommerce' ); break;
                 case 'updated': $msg = __( 'Gift‐rule updated.',   'mh-free-gifts-for-woocommerce' ); break;
                 case 'deleted': $msg = __( 'Gift‐rule deleted.',   'mh-free-gifts-for-woocommerce' ); break;
+                case 'save_failed':
+                    $msg = get_transient( 'mhfgfwc_save_error_' . get_current_user_id() );
+                    delete_transient( 'mhfgfwc_save_error_' . get_current_user_id() );
+                    if ( empty( $msg ) ) {
+                        $msg = __( 'The rule could not be saved. Please try again.', 'mh-free-gifts-for-woocommerce' );
+                    }
+                    $type = 'error';
+                    break;
             }
             if ( $msg ) {
-                printf( '<div class="notice notice-success is-dismissible"><p>%s</p></div>', esc_html( $msg ) );
+                printf( '<div class="notice notice-%1$s is-dismissible"><p>%2$s</p></div>', esc_attr( $type ), esc_html( $msg ) );
             }
         }
 
@@ -355,6 +384,10 @@ class MHFGFWC_Admin {
         $user_deps = $rule ? maybe_unserialize( $rule->user_dependency ) : [];
         $cat_deps = $rule ? maybe_unserialize( $rule->category_dependency ) : [];
         $cat_deps = is_array( $cat_deps ) ? array_map( 'intval', $cat_deps ) : [];
+        $threshold_scope = $rule ? sanitize_key( (string) ( $rule->threshold_scope ?? 'cart' ) ) : 'cart';
+        if ( ! in_array( $threshold_scope, [ 'cart', 'dependencies' ], true ) ) {
+            $threshold_scope = 'cart';
+        }
         
         // phpcs:enable WordPress.Security.NonceVerification.Recommended
         ?>
@@ -385,7 +418,16 @@ class MHFGFWC_Admin {
                         <td><textarea name="description" id="mhfgfwc_description" class="regular-text" rows="3"><?php echo esc_textarea( $rule->description ?? '' ); ?></textarea></td>
                     </tr>
                     <tr>
-                        <th><label for="mhfgfwc_gifts"><?php esc_html_e( 'Select Gifts', 'mh-free-gifts-for-woocommerce' ); ?></label></th>
+                        <th>
+                            <span class="mhfgfwc-field-label">
+                                <label for="mhfgfwc_gifts"><?php esc_html_e( 'Select Gifts', 'mh-free-gifts-for-woocommerce' ); ?></label>
+                                <?php
+                                $this->render_help_tip(
+                                    __( 'Choose one or more gift products for this rule.<br><br>If you want the gift to be added automatically, use Auto-add Gift below and select exactly 1 gift product.', 'mh-free-gifts-for-woocommerce' )
+                                );
+                                ?>
+                            </span>
+                        </th>
                         <td>
                             <select name="gifts[]" id="mhfgfwc_gifts" class="mhfgfwc-product-select" multiple="multiple" data-placeholder="<?php esc_attr_e( 'Search products...', 'mh-free-gifts-for-woocommerce' ); ?>" style="width:100%;">
                                 <?php foreach ( (array) $gifts as $gid ) :
@@ -393,17 +435,23 @@ class MHFGFWC_Admin {
                                         <option value="<?php echo esc_attr( $gid ); ?>" selected><?php echo esc_html( $prod->get_name() ); ?></option>
                                 <?php endif; endforeach; ?>
                             </select>
-                            <p class="description">
-                                <?php esc_html_e( 'Tip: Enable “Auto-add gift” below if you want the gift to be automatically added when the rule is met. Auto-add only works when exactly one gift product is selected.', 'mh-free-gifts-for-woocommerce' ); ?>
-                            </p>
                         </td>
                     </tr>
                     <tr>
-                        <th><label for="mhfgfwc_auto_add_gift"><?php esc_html_e( 'Auto-add Gift', 'mh-free-gifts-for-woocommerce' ); ?></label></th>
+                        <th>
+                            <span class="mhfgfwc-field-label">
+                                <label for="mhfgfwc_auto_add_gift"><?php esc_html_e( 'Auto-add Gift', 'mh-free-gifts-for-woocommerce' ); ?></label>
+                                <?php
+                                $this->render_help_tip(
+                                    __( 'Automatically add the configured gift when the rule qualifies.<br><br>Requires exactly 1 selected gift product, hides that gift from the manual selector, and uses a base gift quantity of 1.', 'mh-free-gifts-for-woocommerce' )
+                                );
+                                ?>
+                            </span>
+                        </th>
                         <td>
                             <label>
                                 <input type="checkbox" name="auto_add_gift" id="mhfgfwc_auto_add_gift" value="1" <?php checked( $auto_add, 1 ); ?> <?php disabled( count( (array) $gifts ) !== 1, true ); ?>>
-                                <?php esc_html_e( 'Automatically add the free gift to the cart when this rule is met (requires exactly 1 gift selected, hides it from the manual selector, and uses a base quantity of 1).', 'mh-free-gifts-for-woocommerce' ); ?>
+                                <?php esc_html_e( 'Automatically add the free gift to the cart when this rule is met.', 'mh-free-gifts-for-woocommerce' ); ?>
                             </label>
                         </td>
                     </tr>
@@ -421,14 +469,17 @@ class MHFGFWC_Admin {
                         </td>
                     </tr>
                     <tr>
-                        <th><label for="mhfgfwc_items_per_row"><?php esc_html_e( 'Items Per Row (Cart)', 'mh-free-gifts-for-woocommerce' ); ?></label></th>
+                        <th>
+                            <span class="mhfgfwc-field-label">
+                                <label for="mhfgfwc_items_per_row"><?php esc_html_e( 'Items Per Row (Cart)', 'mh-free-gifts-for-woocommerce' ); ?></label>
+                                <?php
+                                $this->render_help_tip(
+                                    __( 'Controls how many gift cards appear per row on the cart page.<br><br>If multiple rules are eligible at the same time, the frontend uses the highest Items Per Row value from those eligible rules.', 'mh-free-gifts-for-woocommerce' )
+                                );
+                                ?>
+                            </span>
+                        </th>
                         <td><input name="items_per_row" id="mhfgfwc_items_per_row" type="number" min="1" max="6" value="<?php echo esc_attr( $rule->items_per_row ?? 4 ); ?>" class="small-text">
-                            <p class="description">
-                                <?php esc_html_e(
-                                    'When multiple rules are active, the gift grid uses the highest Items Per Row value from all eligible rules.',
-                                    'mh-free-gifts-for-woocommerce'
-                                ); ?>
-                            </p>
                         </td>
                     </tr>
                 </tbody></table>
@@ -447,7 +498,16 @@ class MHFGFWC_Admin {
                         </td>
                     </tr>
                     <tr>
-                      <th><?php esc_html_e( 'Product Category Dependency', 'mh-free-gifts-for-woocommerce' ); ?></th>
+                      <th>
+                          <span class="mhfgfwc-field-label">
+                              <?php esc_html_e( 'Product Category Dependency', 'mh-free-gifts-for-woocommerce' ); ?>
+                              <?php
+                              $this->render_help_tip(
+                                  __( 'Customer must have at least one product from any selected category in the cart.<br><br>If you also use Cart Quantity or Cart Subtotal, Threshold Scope controls whether those values count the whole purchased cart or only the items matching this category dependency.', 'mh-free-gifts-for-woocommerce' )
+                              );
+                              ?>
+                          </span>
+                      </th>
                       <td>
                         <select name="category_dependency[]" class="mhfgfwc-category-select" multiple="multiple"
                                 data-placeholder="<?php esc_attr_e( 'Search categories...', 'mh-free-gifts-for-woocommerce' ); ?>"
@@ -471,10 +531,25 @@ class MHFGFWC_Admin {
                             }
                             ?>
                         </select>
-                        <p class="description">
-                            <?php esc_html_e( 'Customer must have at least one product from any selected category in the cart.', 'mh-free-gifts-for-woocommerce' ); ?>
-                        </p>
                       </td>
+                    </tr>
+                    <tr id="mhfgfwc_threshold_scope_row">
+                        <th>
+                            <span class="mhfgfwc-field-label">
+                                <label for="mhfgfwc_threshold_scope"><?php esc_html_e( 'Threshold Scope', 'mh-free-gifts-for-woocommerce' ); ?></label>
+                                <?php
+                                $this->render_help_tip(
+                                    __( '<strong>Whole Purchased Cart example:</strong> If your rule is set to Cart Quantity >= 2 and a category dependency is set, then 1 matching item + 1 non-matching item will still qualify.<br><br><strong>Matching Dependency Items Only example:</strong> With the same rule, the cart must contain 2 matching items. 1 matching item + 1 non-matching item will not qualify. Cart Subtotal follows the same logic.', 'mh-free-gifts-for-woocommerce' )
+                                );
+                                ?>
+                            </span>
+                        </th>
+                        <td>
+                            <select name="threshold_scope" id="mhfgfwc_threshold_scope">
+                                <option value="cart" <?php selected( $threshold_scope, 'cart' ); ?>><?php esc_html_e( 'Whole Purchased Cart', 'mh-free-gifts-for-woocommerce' ); ?></option>
+                                <option value="dependencies" <?php selected( $threshold_scope, 'dependencies' ); ?>><?php esc_html_e( 'Matching Dependency Items Only', 'mh-free-gifts-for-woocommerce' ); ?></option>
+                            </select>
+                        </td>
                     </tr>
                     <tr>
                         <th><?php esc_html_e( 'User Dependency', 'mh-free-gifts-for-woocommerce' ); ?></th>
@@ -494,12 +569,18 @@ class MHFGFWC_Admin {
                         </td>
                     </tr>
                     <tr>
-                        <th><label for="mhfgfwc_gift_quantity"><?php esc_html_e( 'Number of Gifts Allowed', 'mh-free-gifts-for-woocommerce' ); ?></label></th>
+                        <th>
+                            <span class="mhfgfwc-field-label">
+                                <label for="mhfgfwc_gift_quantity"><?php esc_html_e( 'Number of Gifts Allowed', 'mh-free-gifts-for-woocommerce' ); ?></label>
+                                <?php
+                                $this->render_help_tip(
+                                    __( 'Sets how many gifts the customer can claim from this rule when it qualifies.<br><br>Auto-add rules use a base quantity of 1, but can still scale when Repeat Gifts For Quantity Multiples is enabled.', 'mh-free-gifts-for-woocommerce' )
+                                );
+                                ?>
+                            </span>
+                        </th>
                         <td>
                             <input name="gift_quantity" id="mhfgfwc_gift_quantity" type="number" min="1" value="<?php echo esc_attr( $rule->gift_quantity ?? 1 ); ?>" class="small-text">
-                            <p class="description">
-                                <?php esc_html_e( 'Auto-add rules use a base quantity of 1, but can still scale with Repeat Gifts For Quantity Multiples.', 'mh-free-gifts-for-woocommerce' ); ?>
-                            </p>
                         </td>
                     </tr>
                     <tr>
@@ -553,15 +634,21 @@ class MHFGFWC_Admin {
                         </td>
                     </tr>
                     <tr>
-                        <th><label for="mhfgfwc_gift_quantity_multiplier"><?php esc_html_e( 'Repeat Gifts For Quantity Multiples', 'mh-free-gifts-for-woocommerce' ); ?></label></th>
+                        <th>
+                            <span class="mhfgfwc-field-label">
+                                <label for="mhfgfwc_gift_quantity_multiplier"><?php esc_html_e( 'Repeat Gifts For Quantity Multiples', 'mh-free-gifts-for-woocommerce' ); ?></label>
+                                <?php
+                                $this->render_help_tip(
+                                    __( 'Scales the Number of Gifts Allowed each time the qualifying Cart Quantity is reached again.<br><br>Example: Cart Quantity >= 2 and Number of Gifts Allowed = 1 gives 1 gift at 2 items, 2 gifts at 4 items, and 3 gifts at 6 items.<br><br>Works with Cart Quantity >= and > rules, including auto-add rules with exactly 1 configured gift product.', 'mh-free-gifts-for-woocommerce' )
+                                );
+                                ?>
+                            </span>
+                        </th>
                         <td>
                             <label>
                                 <input type="checkbox" name="gift_quantity_multiplier" id="mhfgfwc_gift_quantity_multiplier" value="1" <?php checked( $gift_quantity_multiplier, 1 ); ?>>
                                 <?php esc_html_e( 'Multiply the Number of Gifts Allowed for each qualifying Cart Quantity multiple.', 'mh-free-gifts-for-woocommerce' ); ?>
                             </label>
-                            <p class="description">
-                                <?php esc_html_e( 'Example: Cart Quantity >= 2 and Number of Gifts Allowed = 1 gives 1 gift at 2 items, 2 gifts at 4 items, and 3 gifts at 6 items. Works with Cart Quantity >= and > rules, including auto-add rules with exactly one configured gift product.', 'mh-free-gifts-for-woocommerce' ); ?>
-                            </p>
                         </td>
                     </tr>
                     <tr>
@@ -641,6 +728,10 @@ class MHFGFWC_Admin {
         global $wpdb;
         $table = method_exists( 'MHFGFWC_DB', 'rules_table' ) ? MHFGFWC_DB::rules_table() : $wpdb->prefix . 'mhfgfwc_rules';
 
+        if ( class_exists( 'MHFGFWC_Install' ) && method_exists( 'MHFGFWC_Install', 'maybe_install_or_upgrade' ) ) {
+            MHFGFWC_Install::maybe_install_or_upgrade();
+        }
+
         // Build sanitized $_POST clone
         $post = array_map( static function( $v ) {
             return is_array( $v ) ? array_map( 'wp_unslash', $v ) : wp_unslash( $v );
@@ -677,6 +768,13 @@ class MHFGFWC_Admin {
         $product_dependency = isset( $post['product_dependency'] ) ? array_map( 'intval', (array) $post['product_dependency'] ) : [];
         $user_dependency    = isset( $post['user_dependency'] )    ? array_map( 'intval', (array) $post['user_dependency'] )    : [];
         $category_dependency = isset( $post['category_dependency'] ) ? array_map( 'intval', (array) $post['category_dependency'] ) : [];
+        $threshold_scope = isset( $post['threshold_scope'] ) ? sanitize_key( $post['threshold_scope'] ) : 'cart';
+        if ( ! in_array( $threshold_scope, [ 'cart', 'dependencies' ], true ) ) {
+            $threshold_scope = 'cart';
+        }
+        if ( empty( $product_dependency ) && empty( $category_dependency ) ) {
+            $threshold_scope = 'cart';
+        }
 
         $disable_with_coupon = ! empty( $post['disable_with_coupon'] ) ? 1 : 0;
 
@@ -710,6 +808,7 @@ class MHFGFWC_Admin {
             'product_dependency'  => maybe_serialize( $product_dependency ),
             'user_dependency'     => maybe_serialize( $user_dependency ),
             'category_dependency' => maybe_serialize( $category_dependency ),
+            'threshold_scope'     => $threshold_scope,
             'disable_with_coupon' => $disable_with_coupon,
             'subtotal_operator'   => $subtotal_operator,
             'subtotal_amount'     => $subtotal_amount,
@@ -724,11 +823,37 @@ class MHFGFWC_Admin {
         // Insert / Update
         // We intentionally use $wpdb writes here; inputs are sanitized and non-user identifiers.
         // phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
+        $write_result = false;
+
         if ( $rule_id ) {
-            $wpdb->update( $table, $data, [ 'id' => $rule_id ] );
+            $write_result = $wpdb->update( $table, $data, [ 'id' => $rule_id ] );
         } else {
-            $wpdb->insert( $table, $data );
-            $rule_id = (int) $wpdb->insert_id;
+            $write_result = $wpdb->insert( $table, $data );
+            if ( false !== $write_result ) {
+                $rule_id = (int) $wpdb->insert_id;
+            }
+        }
+
+        if ( false === $write_result && class_exists( 'MHFGFWC_Install' ) && method_exists( 'MHFGFWC_Install', 'install_tables' ) ) {
+            MHFGFWC_Install::install_tables();
+
+            if ( $rule_id ) {
+                $write_result = $wpdb->update( $table, $data, [ 'id' => $rule_id ] );
+            } else {
+                $write_result = $wpdb->insert( $table, $data );
+                if ( false !== $write_result ) {
+                    $rule_id = (int) $wpdb->insert_id;
+                }
+            }
+        }
+
+        if ( false === $write_result ) {
+            $save_error = $wpdb->last_error ? $wpdb->last_error : __( 'Database schema is out of date or the rule data could not be written.', 'mh-free-gifts-for-woocommerce' );
+            set_transient( 'mhfgfwc_save_error_' . get_current_user_id(), $save_error, MINUTE_IN_SECONDS );
+
+            $redirect_rule_id = $rule_id ? '&rule_id=' . $rule_id : '';
+            wp_safe_redirect( admin_url( 'admin.php?page=mhfgfwc_add_rule' . $redirect_rule_id . '&message=save_failed' ) );
+            exit;
         }
         // phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching
 
