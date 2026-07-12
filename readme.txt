@@ -4,9 +4,9 @@ Plugin URI: https://www.mediahubsolutions.com/mh-free-gifts-for-woocommerce/
 Description: Let customers choose or auto-add a free gift when cart criteria are met (threshold, qty, dependencies).
 Tags: free gifts for woocommerce, buy one get one, free gift, Gift Product Woocommerce, WooCommerce gift
 Requires at least: 6.0
-Tested up to: 6.9.4
-Stable tag: 1.1.1
-Version: 1.1.1
+Tested up to: 7.0.1
+Stable tag: 1.1.4
+Version: 1.1.4
 License: GPLv2 or later
 License URI: https://www.gnu.org/licenses/gpl-2.0.html
 Donate link: https://ko-fi.com/adk77
@@ -117,6 +117,18 @@ Yes! There’s no premium version or upsells. Everything is included for free.
 Support is provided via the WordPress.org forums or through the Mediahub support site.
 
 == Changelog ==
+
+= 1.1.4 (2026-07-13) =
+* [Improved] Confirmed compatibility and updated plugin metadata for WordPress 7.0.1.
+
+= 1.1.3 (2026-07-06) =
+* [Fixed] Free gift line items now stay one-time only when subscription plugins are active, preventing customers from switching gifts into recurring subscription items.
+* [Improved] Subscription purchase selectors are now hidden on free-gift rows in the cart so recurring options are not shown for gifts.
+* [Fixed] The admin rule form now safely handles new-rule screens without throwing null date warnings.
+
+= 1.1.2 (2026-07-06) =
+* [Fixed] Admin gift-product search now uses a direct WooCommerce-safe lookup for products and variations, preventing 500 errors on some sites when selecting gifts in the rule editor.
+* [Improved] Variation gifts can now be found by SKU or parent product title in the admin selector, and invalid product rows are skipped safely instead of breaking the AJAX response.
 
 = 1.1.1 (2026-03-31) =
 * [Fixed] Rules can now scope Cart Quantity and Cart Subtotal thresholds to dependency-matching items, so offers such as “buy 2 from category X” no longer qualify with 1 item from category X plus 1 from another category.

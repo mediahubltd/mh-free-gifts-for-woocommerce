@@ -583,18 +583,27 @@ final class MHFGFWC_Engine {
                 $product->get_variation_attributes(),
                 $gift_meta
             );
-        } else {
-            $cart_key = WC()->cart->add_to_cart(
-                $gift_product_id,
-                1,
-                0,
+	        } else {
+	            $cart_key = WC()->cart->add_to_cart(
+	                $gift_product_id,
+	                1,
+	                0,
                 array(),
-                $gift_meta
-            );
-        }
+	                $gift_meta
+	            );
+	        }
 
-	        return ! empty( $cart_key );
-	    }
+	        if ( $cart_key && isset( WC()->cart->cart_contents[ $cart_key ] ) && class_exists( 'MHFGFWC_Frontend' ) ) {
+	            $frontend = MHFGFWC_Frontend::instance();
+	            if ( $frontend && method_exists( $frontend, 'normalize_gift_cart_item_subscription_state' ) ) {
+	                WC()->cart->cart_contents[ $cart_key ] = $frontend->normalize_gift_cart_item_subscription_state(
+	                    WC()->cart->cart_contents[ $cart_key ]
+	                );
+	            }
+	        }
+
+		        return ! empty( $cart_key );
+		    }
 
 	/**
 	 * Check whether gifts may stack across multiple eligible rules.

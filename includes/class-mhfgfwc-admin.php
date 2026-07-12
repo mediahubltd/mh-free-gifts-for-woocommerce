@@ -659,7 +659,7 @@ class MHFGFWC_Admin {
                                 id="mhfgfwc_date_from"
                                 type="text"
                                 class="mhfgfwc-datepicker"
-                                value="<?php echo esc_attr( $rule->date_from ? gmdate( 'Y-m-d H:i:s', strtotime( $rule->date_from ) ) : '' ); ?>"
+                                value="<?php echo esc_attr( ! empty( $rule ) && ! empty( $rule->date_from ) ? gmdate( 'Y-m-d H:i:s', strtotime( $rule->date_from ) ) : '' ); ?>"
                                 autocomplete="new-password"
                                 autocorrect="off"
                                 autocapitalize="off"
@@ -676,7 +676,7 @@ class MHFGFWC_Admin {
                                 id="mhfgfwc_date_to"
                                 type="text"
                                 class="mhfgfwc-datepicker"
-                                value="<?php echo esc_attr( $rule->date_to ? gmdate( 'Y-m-d H:i:s', strtotime( $rule->date_to ) ) : '' ); ?>"
+                                value="<?php echo esc_attr( ! empty( $rule ) && ! empty( $rule->date_to ) ? gmdate( 'Y-m-d H:i:s', strtotime( $rule->date_to ) ) : '' ); ?>"
                                 autocomplete="new-password"
                                 autocorrect="off"
                                 autocapitalize="off"
@@ -928,34 +928,77 @@ class MHFGFWC_Admin {
             wp_send_json_error( [ 'message' => esc_html__( 'Invalid nonce', 'mh-free-gifts-for-woocommerce' ) ], 400 );
         }
 
-        $term = isset( $_REQUEST['q'] ) ? sanitize_text_field( wp_unslash( $_REQUEST['q'] ) ) : '';
+        $term = isset( $_REQUEST['q'] ) ? trim( sanitize_text_field( wp_unslash( $_REQUEST['q'] ) ) ) : '';
+        if ( '' === $term ) {
+            wp_send_json_success( [] );
+        }
 
-        $posts = get_posts( [
-            'post_type'      => [ 'product', 'product_variation' ],
-            's'              => $term,
-            'posts_per_page' => 20,
-        ] );
+        global $wpdb;
+
+        $posts_table    = $wpdb->posts;
+        $postmeta_table = $wpdb->postmeta;
+        $like           = '%' . $wpdb->esc_like( $term ) . '%';
+
+        // Query products directly so third-party search customizations on admin AJAX
+        // cannot break the selector, while still allowing variation matches by SKU
+        // or parent-product title.
+        // phpcs:disable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
+        $posts = $wpdb->get_results(
+            $wpdb->prepare(
+                "SELECT DISTINCT p.ID, p.post_type
+                 FROM {$posts_table} p
+                 LEFT JOIN {$postmeta_table} sku_meta
+                    ON sku_meta.post_id = p.ID
+                   AND sku_meta.meta_key = '_sku'
+                 LEFT JOIN {$posts_table} parent
+                    ON parent.ID = p.post_parent
+                 WHERE p.post_type IN ('product', 'product_variation')
+                   AND p.post_status IN ('publish', 'private', 'draft', 'pending', 'future')
+                   AND (
+                        p.post_title LIKE %s
+                        OR sku_meta.meta_value LIKE %s
+                        OR (
+                            p.post_type = 'product_variation'
+                            AND parent.post_title LIKE %s
+                        )
+                   )
+                 ORDER BY
+                    CASE WHEN p.post_type = 'product' THEN 0 ELSE 1 END ASC,
+                    COALESCE(NULLIF(parent.post_title, ''), p.post_title) ASC,
+                    p.menu_order ASC,
+                    p.post_title ASC
+                 LIMIT 20",
+                $like,
+                $like,
+                $like
+            )
+        );
+        // phpcs:enable WordPress.DB.DirectDatabaseQuery.DirectQuery, WordPress.DB.DirectDatabaseQuery.NoCaching, WordPress.DB.PreparedSQL.InterpolatedNotPrepared
 
         $results = [];
-        foreach ( $posts as $p ) {
-            if ( 'product_variation' === $p->post_type ) {
-                $variation = wc_get_product( $p->ID );
-                if ( ! $variation ) {
-                    continue;
-                }
-                $label = $variation->get_name();
-            } else {
-                $product = wc_get_product( $p->ID );
+        foreach ( (array) $posts as $p ) {
+            try {
+                $product = wc_get_product( (int) $p->ID );
                 if ( ! $product ) {
                     continue;
                 }
-                $label = $product->get_name();
-            }
 
-            $results[] = [
-                'id'   => $p->ID,
-                'text' => $label,
-            ];
+                $label = trim( (string) $product->get_name() );
+                if ( '' === $label ) {
+                    $label = sprintf(
+                        /* translators: %d: product ID */
+                        __( 'Product #%d', 'mh-free-gifts-for-woocommerce' ),
+                        (int) $p->ID
+                    );
+                }
+
+                $results[] = [
+                    'id'   => (int) $p->ID,
+                    'text' => $label,
+                ];
+            } catch ( Throwable $e ) {
+                continue;
+            }
         }
 
         wp_send_json_success( $results );

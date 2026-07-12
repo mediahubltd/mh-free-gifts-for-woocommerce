@@ -34,6 +34,37 @@ jQuery(function ($) {
         .text(label || orig || $btn.text());
   }
 
+  function hideGiftSubscriptionOptions(context) {
+    var $context = context ? $(context) : $(document);
+    var $giftRows = $context.filter('.mhfgfwc-gift-row')
+      .add($context.find('.mhfgfwc-gift-row'));
+
+    if (!$giftRows.length) {
+      $giftRows = $context.find('.mhfgfwc-cart-badge, .mhfgfwc-badge').closest('tr, li, .wc-block-cart-item, .shop_table tr');
+    }
+
+    $giftRows.each(function () {
+      var $row = $(this);
+      var $candidates = $row.find('fieldset, form, div, p, ul, ol').filter(function () {
+        var $candidate = $(this);
+        if (!$candidate.find('input[type="radio"], select').length) {
+          return false;
+        }
+
+        var text = ($candidate.text() || '').toLowerCase();
+        return text.indexOf('one time') !== -1
+          || text.indexOf('every ') !== -1
+          || text.indexOf('subscription') !== -1;
+      });
+
+      $candidates.each(function () {
+        var $candidate = $(this);
+        $candidate.addClass('mhfgfwc-subscription-options-hidden');
+        $candidate.find('input, select, textarea, button').prop('disabled', true);
+      });
+    });
+  }
+
   function ensureToggleIcon($toggle) {
     var $icon = $toggle.find('.mhfgfwc-toggle-icon');
 
@@ -96,6 +127,7 @@ jQuery(function ($) {
   }
 
   initToggleBehaviour();
+  hideGiftSubscriptionOptions();
 
   $(document).on('click', '.mhfgfwc-show-gifts-toggle', function (e) {
     e.preventDefault();
@@ -238,6 +270,7 @@ jQuery(function ($) {
             // Re-initialise toggle UI + button bindings
             initToggleBehaviour($toggleWrap);
             applyToggleState($toggleWrap, wasOpen);
+            hideGiftSubscriptionOptions($section);
 
             // If you have a global event binder, call it
             if (typeof window.mhfgfwcBindGiftEvents === 'function') {
@@ -260,6 +293,10 @@ jQuery(function ($) {
       }
     });
 
+  });
+
+  $(document.body).on('updated_cart_totals updated_checkout wc_fragments_refreshed', function () {
+    hideGiftSubscriptionOptions();
   });
 
 });

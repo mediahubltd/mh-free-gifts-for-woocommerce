@@ -130,6 +130,9 @@
   font-weight:700;
   font-style:italic;
 }
+.mhfgfwc-subscription-options-hidden{
+  display:none !important;
+}
 .mhfgfwc-block-badge{
   font-size:.9em;
   opacity:.85;

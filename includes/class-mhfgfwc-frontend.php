@@ -38,12 +38,16 @@ final class MHFGFWC_Frontend {
 
 		// Pricing + qty hardening
 		add_action( 'woocommerce_before_calculate_totals', array( $this, 'apply_free_gift_prices' ), 20 );
+		add_filter( 'woocommerce_add_cart_item', array( $this, 'normalize_gift_cart_item_subscription_state' ), 20 );
+		add_filter( 'woocommerce_get_cart_item_from_session', array( $this, 'normalize_gift_cart_item_subscription_state' ), 20, 3 );
 		add_filter( 'woocommerce_cart_item_quantity', array( $this, 'filter_gift_quantity_field' ), 10, 3 );
+		add_filter( 'woocommerce_cart_item_class', array( $this, 'add_gift_cart_item_class' ), 10, 3 );
 		add_filter( 'woocommerce_cart_item_name', array( $this, 'append_cart_free_gift_badge' ), 10, 3 );
 		add_filter( 'woocommerce_cart_item_price', array( $this, 'hide_cart_free_gift_price' ), 10, 3 );
 		add_filter( 'woocommerce_cart_item_subtotal', array( $this, 'hide_cart_free_gift_price' ), 10, 3 );
 		add_filter( 'woocommerce_update_cart_validation', array( $this, 'validate_gift_quantity_update' ), 10, 4 );
 		add_action( 'woocommerce_before_calculate_totals', array( $this, 'force_gift_qty_one' ), 5 );
+		add_action( 'woocommerce_before_calculate_totals', array( $this, 'enforce_gift_one_time_purchase_mode' ), 4 );
 
 		// Surface “Free gift” in line item data (cart/checkout/emails)
 		add_filter( 'woocommerce_get_item_data', array( $this, 'render_gift_badge_item_data' ), 10, 2 );
@@ -430,6 +434,53 @@ final class MHFGFWC_Frontend {
 
 
 	/**
+	 * Remove recurring-subscription state from a free-gift cart item.
+	 *
+	 * @param array $cart_item      Cart item payload.
+	 * @param array $session_values Raw session values when restoring cart items.
+	 * @param mixed $cart_item_key  Cart item key (unused).
+	 * @return array
+	 */
+	public function normalize_gift_cart_item_subscription_state( $cart_item, $session_values = array(), $cart_item_key = '' ) {
+		unset( $session_values, $cart_item_key );
+
+		if ( ! is_array( $cart_item ) || empty( $cart_item['mhfgfwc_gift'] ) ) {
+			return $cart_item;
+		}
+
+		$subscription_keys = array(
+			'active_subscription_scheme',
+			'selected_subscription_scheme',
+			'subscription_scheme',
+			'subscription_schemes',
+			'subscription_period',
+			'subscription_period_interval',
+			'subscription_length',
+			'subscription_trial_period',
+			'subscription_trial_length',
+			'subscription_price',
+			'subscribe_to_cart',
+			'convert_to_sub',
+			'selling_plan',
+			'selling_plan_id',
+			'wcsatt_data',
+			'wcsatt_scheme',
+			'wcsatt_schemes',
+			'wcsatt_subscription_scheme',
+		);
+
+		foreach ( $subscription_keys as $subscription_key ) {
+			if ( array_key_exists( $subscription_key, $cart_item ) ) {
+				unset( $cart_item[ $subscription_key ] );
+			}
+		}
+
+		$cart_item['mhfgfwc_one_time_only'] = 1;
+
+		return $cart_item;
+	}
+
+	/**
 	 * Disable quantity field for free gifts in the cart.
 	 */
 	public function filter_gift_quantity_field( $product_quantity, $cart_item_key, $cart_item ) {
@@ -440,6 +491,25 @@ final class MHFGFWC_Frontend {
 		return $product_quantity;
 	}
 
+	/**
+	 * Add a stable CSS class to classic gift rows so related UI can be hidden safely.
+	 *
+	 * @param string $class         Existing class string.
+	 * @param array  $cart_item     Cart item payload.
+	 * @param string $cart_item_key Cart item key (unused).
+	 * @return string
+	 */
+	public function add_gift_cart_item_class( $class, $cart_item, $cart_item_key ) {
+		unset( $cart_item_key );
+
+		if ( empty( $cart_item['mhfgfwc_gift'] ) ) {
+			return $class;
+		}
+
+		$class = is_string( $class ) ? $class : '';
+
+		return trim( $class . ' mhfgfwc-gift-row' );
+	}
 
 
 	/**
@@ -464,6 +534,34 @@ final class MHFGFWC_Frontend {
 			if ( ! empty( $item['mhfgfwc_gift'] ) && (int) $item['quantity'] !== 1 ) {
 				// false = don’t trigger recalculation loops
 				WC()->cart->set_quantity( $key, 1, false );
+			}
+		}
+	}
+
+	/**
+	 * Ensure free-gift line items stay one-time even when subscription plugins
+	 * attach recurring scheme data in cart/session state.
+	 *
+	 * @param \WC_Cart $cart Cart instance.
+	 * @return void
+	 */
+	public function enforce_gift_one_time_purchase_mode( $cart ) {
+		if ( ! $cart || ! method_exists( $cart, 'get_cart' ) ) {
+			return;
+		}
+
+		if ( is_admin() && ! defined( 'DOING_AJAX' ) ) {
+			return;
+		}
+
+		foreach ( $cart->get_cart() as $key => $item ) {
+			if ( empty( $item['mhfgfwc_gift'] ) ) {
+				continue;
+			}
+
+			$normalized = $this->normalize_gift_cart_item_subscription_state( $item );
+			if ( isset( $cart->cart_contents[ $key ] ) && is_array( $cart->cart_contents[ $key ] ) ) {
+				$cart->cart_contents[ $key ] = $normalized;
 			}
 		}
 	}
@@ -1198,18 +1296,24 @@ final class MHFGFWC_Frontend {
 				$gift_meta
 			);
 			//error_log( "MHFGFWC Variations: cart_key=" . var_export( $cart_key, true ) );
-		} else {
-			$cart_key = WC()->cart->add_to_cart(
-				$pid,
-				1,
-				0,
+			} else {
+				$cart_key = WC()->cart->add_to_cart(
+					$pid,
+					1,
+					0,
 				array(),
 				$gift_meta
-			);
-			//error_log( "MHFGFWC: cart_key=" . var_export( $cart_key, true ) );
-		}
+				);
+				//error_log( "MHFGFWC: cart_key=" . var_export( $cart_key, true ) );
+			}
 
-		if ( ! $cart_key ) {
+			if ( $cart_key && isset( WC()->cart->cart_contents[ $cart_key ] ) ) {
+				WC()->cart->cart_contents[ $cart_key ] = $this->normalize_gift_cart_item_subscription_state(
+					WC()->cart->cart_contents[ $cart_key ]
+				);
+			}
+
+			if ( ! $cart_key ) {
 			wp_send_json_error( array( 'message' => esc_html__( 'Could not add gift.', 'mh-free-gifts-for-woocommerce' ) ) );
 		}
 
