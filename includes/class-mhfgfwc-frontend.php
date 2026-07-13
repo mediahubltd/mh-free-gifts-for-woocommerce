@@ -820,9 +820,11 @@ final class MHFGFWC_Frontend {
 	                    continue;
 	                }
 
-	                $selected_keys  = isset( $gift_cart[ $rule_id ][ $prod_id ] ) ? array_values( (array) $gift_cart[ $rule_id ][ $prod_id ] ) : array();
-	                $selected_count = count( $selected_keys );
-	                $can_add_more   = ! $disabled;
+	                $selected_keys    = isset( $gift_cart[ $rule_id ][ $prod_id ] ) ? array_values( (array) $gift_cart[ $rule_id ][ $prod_id ] ) : array();
+	                $selected_count   = count( $selected_keys );
+	                $can_add_more     = ! $disabled;
+	                $show_add_button  = $can_add_more && 0 === $selected_count;
+	                $show_remove_wrap = $selected_count > 0;
 
 	                echo '<div class="mhfgfwc-gift-item' . esc_attr( $rule_class ) . '" data-rule="' . esc_attr( $rule_id ) . '">';
 
@@ -837,26 +839,33 @@ final class MHFGFWC_Frontend {
 	                if ( $selected_count > 0 ) {
 					/* translators: %d: number of selected free-gift copies for this product. */
 					echo '<div class="mhfgfwc-selected-count">' . esc_html( sprintf( _n( 'Selected: %d', 'Selected: %d', $selected_count, 'mh-free-gifts-for-woocommerce' ), $selected_count ) ) . '</div>';
+	                }
 
-					foreach ( $selected_keys as $item_key ) {
-	                    echo '<a href="#" class="mhfgfwc-remove-gift" data-item-key="' .
-	                            esc_attr( (string) $item_key ) .
+	                if ( $show_remove_wrap || $show_add_button ) {
+					echo '<div class="mhfgfwc-gift-actions">';
+
+					if ( $show_remove_wrap ) {
+						foreach ( $selected_keys as $item_key ) {
+		                    echo '<a href="#" class="mhfgfwc-remove-gift" data-item-key="' .
+		                            esc_attr( (string) $item_key ) .
+		                         '">' .
+		                            esc_html( $texts['remove_button_text'] ) .
+		                         '</a>';
+						}
+					}
+
+					if ( $show_add_button ) {
+	                    echo '<a href="#" class="mhfgfwc-add-gift" data-rule="' .
+	                            esc_attr( $rule_id ) .
+	                            '" data-product="' .
+	                            esc_attr( $prod_id ) .
 	                         '">' .
-	                            esc_html( $texts['remove_button_text'] ) .
+	                            esc_html( $texts['add_button_text'] ) .
 	                         '</a>';
 					}
-                }
 
-                if ( $can_add_more ) {
-
-                    echo '<a href="#" class="mhfgfwc-add-gift" data-rule="' .
-                            esc_attr( $rule_id ) .
-                            '" data-product="' .
-                            esc_attr( $prod_id ) .
-                         '">' .
-                            esc_html( $texts['add_button_text'] ) .
-                         '</a>';
-                }
+					echo '</div>';
+	                }
 
                 echo '</div>'; // .mhfgfwc-gift-item
             }
